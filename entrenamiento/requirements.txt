@@ -1,0 +1,14 @@
+torch==2.4.1
+torchvision==0.19.1
+ultralytics==8.3.27
+roboflow==1.1.48
+easyocr==1.7.2
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+pandas==2.2.2
+matplotlib==3.9.2
+pillow==10.4.0
+pyyaml==6.0.2
+supervision==0.24.0
+scikit-learn==1.5.2
+tqdm==4.66.5

@@ -1,0 +1,49 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+conda-env/
+
+# Variables de entorno y secretos (PROHIBIDO subir credenciales según Sección 7.1 y 11)
+.env
+*.env
+!*.env.example
+!.env.example
+client_secret*.json
+google-services.json
+service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Bases de datos locales y archivos subidos
+*.db
+*.sqlite3
+web/uploads/*
+!web/uploads/.gitkeep
+
+# Pesos de modelos grandes
+*.pt
+*.onnx
+*.engine
+runs/
+
+# Flutter / Android
+movil/.dart_tool/
+movil/.packages
+movil/build/
+movil/.flutter-plugins
+movil/.flutter-plugins-dependencies
+movil/android/.gradle/
+movil/android/local.properties
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

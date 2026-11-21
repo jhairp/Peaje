@@ -1,0 +1,184 @@
+{
+  "info": {
+    "name": "IAM-811 Lab 3 - Sistema Inteligente de Control de Peaje API v1",
+    "_postman_id": "b8462a59-2ecb-401d-b90e-6dd522fffa60",
+    "description": "Colección completa de la API REST v1 del Sistema Inteligente de Control de Peaje (Sección 4.5 y 7.2). Todas las rutas excepto /api/v1/auth/google exigen token Bearer JWT emitido tras autenticación con Google OAuth 2.0.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "https://peaje-ia.tudominio.com"
+    },
+    {
+      "key": "JWT_TOKEN",
+      "value": "PEGAR_TOKEN_DE_SESION_AQUI"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Autenticación con Google OAuth 2.0 (POST /api/v1/auth/google)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/api/v1/auth/google",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "v1", "auth", "google"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"GOOGLE_ID_TOKEN_O_ACCESS_TOKEN\"\n}"
+        }
+      }
+    },
+    {
+      "name": "2. Registrar Paso desde Frame de Caseta (POST /api/v1/pasos/frame)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{JWT_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/api/v1/pasos/frame",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "v1", "pasos", "frame"]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "vehiculo_caseta.jpg"
+            },
+            {
+              "key": "caseta_id",
+              "value": "1",
+              "type": "text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "3. Consultar Placa por Texto (POST /api/v1/placas/consultar)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{JWT_TOKEN}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/api/v1/placas/consultar",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "v1", "placas", "consultar"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"placa\": \"1852-PHD\"\n}"
+        }
+      }
+    },
+    {
+      "name": "4. Consultar Placa por Imagen M1+OCR (POST /api/v1/placas/consultar-imagen)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{JWT_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/api/v1/placas/consultar-imagen",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "v1", "placas", "consultar-imagen"]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "foto_placa.jpg"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "5. Historial de Pasos de una Placa (GET /api/v1/placas/{placa}/historial)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{JWT_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/api/v1/placas/1852PHD/historial",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "v1", "placas", "1852PHD", "historial"]
+        }
+      }
+    },
+    {
+      "name": "6. Resumen Diario de Caseta (GET /api/v1/casetas/{id}/resumen)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{JWT_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/api/v1/casetas/1/resumen",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "v1", "casetas", "1", "resumen"]
+        }
+      }
+    },
+    {
+      "name": "7. Chat con el Agente Conversacional Qwen (POST /api/v1/agente/chat)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{JWT_TOKEN}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/api/v1/agente/chat",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "v1", "agente", "chat"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mensaje\": \"¿Cuál es el estado de la placa 1852-PHD?\"\n}"
+        }
+      }
+    }
+  ]
+}

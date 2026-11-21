@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema Inteligente de Control de Peaje · IAM-811</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #0b1120; color: #f1f5f9; }
+    .glass { background: rgba(30, 41, 59, 0.78); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.15); }
+    .pulse-dot { animation: pulse 1.8s infinite; }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: 0.55; }
+    }
+    .nuevo-item { animation: highlightFade 2.5s ease-out; }
+    @keyframes highlightFade {
+      0% { background-color: rgba(34, 197, 94, 0.35); transform: translateY(-4px); }
+      100% { background-color: transparent; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- ====================================================================== -->
+  <!-- PANTALLA DE INICIO DE SESIÓN EXCLUSIVO CON GOOGLE OAUTH 2.0 (Sec. 4.4) -->
+  <!-- ====================================================================== -->
+  <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 p-4">
+    <div class="glass max-w-md w-full rounded-2xl p-8 shadow-2xl border border-slate-700/60">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center mx-auto mb-4">
+          <i class="fa-solid fa-road-barrier text-3xl text-blue-400"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-white">Control Inteligente de Peaje</h1>
+        <p class="text-sm text-slate-400 mt-1">IAM-811 Machine Learning y Aprendizaje Profundo</p>
+        <span class="inline-block mt-2 text-xs px-3 py-1 rounded-full bg-blue-950 text-blue-300 border border-blue-800">
+          Acceso Exclusivo con Google OAuth 2.0 (Lista Blanca)
+        </span>
+      </div>
+
+      <!-- Mensaje de error / Acceso Denegado -->
+      <div id="login-error-box" class="hidden mb-5 p-4 rounded-xl bg-red-950/90 border border-red-500/60 text-red-200 text-sm">
+        <div class="flex items-start gap-3">
+          <i class="fa-solid fa-circle-xmark text-red-400 text-lg mt-0.5"></i>
+          <div>
+            <p class="font-bold text-red-300">Acceso Denegado (Lista Blanca)</p>
+            <p id="login-error-msg" class="mt-1 text-xs leading-relaxed"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contenedor oficial de Google Identity Services -->
+      <div class="flex flex-col items-center gap-3 mb-6">
+        <div id="g_id_onload_container"></div>
+        <div id="google-btn-wrapper" class="w-full flex justify-center"></div>
+      </div>
+
+      <div class="relative my-5">
+        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-700"></div></div>
+        <div class="relative flex justify-center text-xs uppercase">
+          <span class="bg-slate-900 px-3 text-slate-400">Acceso OAuth / Verificación de Lista Blanca</span>
+        </div>
+      </div>
+
+      <!-- Selector rápido de cuentas Google para demostración de roles y rechazo de no autorizados -->
+      <div class="space-y-2.5">
+        <button onclick="iniciarSesionGoogleCuenta('jhairpinto8@gmail.com', 'Jhair Pinto (Admin)')"
+          class="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 transition text-left">
+          <div class="flex items-center gap-3">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="G" />
+            <div>
+              <p class="text-sm font-semibold text-white">jhairpinto8@gmail.com</p>
+              <p class="text-xs text-emerald-400">Rol: Administrador (Autorizado)</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-arrow-right text-slate-400"></i>
+        </button>
+
+        <button onclick="iniciarSesionGoogleCuenta('doc.alvaro.pinto.ma@unifranz.edu.bo', 'Ing. Alvaro Pinto Mamani')"
+          class="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 transition text-left">
+          <div class="flex items-center gap-3">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="G" />
+            <div>
+              <p class="text-sm font-semibold text-white">doc.alvaro.pinto.ma@unifranz.edu.bo</p>
+              <p class="text-xs text-emerald-400">Rol: Administrador Docente (Autorizado)</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-arrow-right text-slate-400"></i>
+        </button>
+
+        <button onclick="iniciarSesionGoogleCuenta('operador.peaje.unifranz@gmail.com', 'Operador Caseta 1')"
+          class="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 transition text-left">
+          <div class="flex items-center gap-3">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="G" />
+            <div>
+              <p class="text-sm font-semibold text-white">operador.peaje.unifranz@gmail.com</p>
+              <p class="text-xs text-sky-400">Rol: Operador de Caseta (Autorizado)</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-arrow-right text-slate-400"></i>
+        </button>
+
+        <button onclick="iniciarSesionGoogleCuenta('usuario.no.autorizado@gmail.com', 'Cuenta Externa No Autorizada')"
+          class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-red-950/30 hover:bg-red-900/40 border border-red-800/50 transition text-left">
+          <div class="flex items-center gap-3">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5 opacity-75" alt="G" />
+            <div>
+              <p class="text-xs font-semibold text-red-200">usuario.no.autorizado@gmail.com</p>
+              <p class="text-[11px] text-red-400">Probar rechazo de cuenta fuera de Lista Blanca</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-ban text-red-400"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- BARRA SUPERIOR DE NAVEGACIÓN                                           -->
+  <!-- ====================================================================== -->
+  <header class="glass sticky top-0 z-30 border-b border-slate-800 px-6 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/30">
+          <i class="fa-solid fa-road-barrier text-white text-lg"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-base text-white tracking-tight">TelePeaje IA · Control en Tiempo Real</h1>
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span id="rt-dot" class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+            <span id="rt-status-text">Tiempo Real Activo (WebSocket + SSE)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pestañas de las 6 páginas mínimas obligatorias (Sección 4.2) -->
+      <nav class="flex flex-wrap items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+        <button onclick="cambiarTab('panel')" id="tab-btn-panel" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white transition">
+          <i class="fa-solid fa-gauge-high mr-1.5"></i>Panel Tiempo Real
+        </button>
+        <button onclick="cambiarTab('vehiculos')" id="tab-btn-vehiculos" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition">
+          <i class="fa-solid fa-car-side mr-1.5"></i>Vehículos (<span id="nav-count-vehiculos">24</span>)
+        </button>
+        <button onclick="cambiarTab('pasos')" id="tab-btn-pasos" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition">
+          <i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Pasos
+        </button>
+        <button onclick="cambiarTab('alertas')" id="tab-btn-alertas" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition">
+          <i class="fa-solid fa-triangle-exclamation mr-1.5 text-amber-400"></i>Alertas
+          <span id="nav-badge-alertas" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-red-600 text-white">0</span>
+        </button>
+        <button onclick="cambiarTab('chat')" id="tab-btn-chat" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition">
+          <i class="fa-solid fa-robot mr-1.5 text-purple-400"></i>Chat Agente (Qwen)
+        </button>
+        <button onclick="cambiarTab('estado')" id="tab-btn-estado" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition">
+          <i class="fa-solid fa-server mr-1.5 text-emerald-400"></i>Estado GPU
+        </button>
+      </nav>
+
+      <!-- Usuario autenticado con Google -->
+      <div class="flex items-center gap-3">
+        <div class="text-right hidden sm:block">
+          <p id="user-name-label" class="text-xs font-semibold text-white">Usuario</p>
+          <p id="user-email-label" class="text-[11px] text-slate-400">correo@unifranz.edu.bo</p>
+        </div>
+        <span id="user-role-badge" class="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase bg-emerald-950 text-emerald-300 border border-emerald-700">
+          ADMIN
+        </span>
+        <button onclick="cerrarSesion()" title="Cerrar sesión" class="p-2 rounded-lg bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 transition">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ====================================================================== -->
+  <!-- CONTENIDO PRINCIPAL                                                    -->
+  <!-- ====================================================================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+    <!-- 1. PÁGINA: PANEL EN TIEMPO REAL -->
+    <section id="view-panel" class="space-y-6">
+      <!-- Contadores en tiempo real -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-blue-500">
+          <div class="flex justify-between items-center">
+            <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Pasos Registrados</span>
+            <i class="fa-solid fa-car-tunnel text-blue-400 text-lg"></i>
+          </div>
+          <p id="kpi-total-pasos" class="text-3xl font-extrabold text-white mt-2">0</p>
+          <p class="text-xs text-slate-400 mt-1">Actualización instantánea sin recarga</p>
+        </div>
+
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-emerald-500">
+          <div class="flex justify-between items-center">
+            <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Recaudación Total</span>
+            <i class="fa-solid fa-coins text-emerald-400 text-lg"></i>
+          </div>
+          <p class="text-3xl font-extrabold text-emerald-400 mt-2">Bs. <span id="kpi-recaudacion">0.00</span></p>
+          <p class="text-xs text-slate-400 mt-1">Cobro automático según categoría y ejes</p>
+        </div>
+
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-red-500">
+          <div class="flex justify-between items-center">
+            <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Alertas Activas</span>
+            <i class="fa-solid fa-bell text-red-400 text-lg"></i>
+          </div>
+          <p id="kpi-alertas" class="text-3xl font-extrabold text-red-400 mt-2">0</p>
+          <p class="text-xs text-slate-400 mt-1">No registradas o sin saldo suficiente</p>
+        </div>
+
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-purple-500">
+          <div class="flex justify-between items-center">
+            <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Vehículos en Padrón</span>
+            <i class="fa-solid fa-id-card text-purple-400 text-lg"></i>
+          </div>
+          <p id="kpi-vehiculos" class="text-3xl font-extrabold text-white mt-2">24</p>
+          <p class="text-xs text-slate-400 mt-1">Mínimo exigido: 20 vehículos</p>
+        </div>
+      </div>
+
+      <!-- Fila central: Último paso en vivo + Simulador/Capturador de Caseta + Alertas en vivo -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Último vehículo detectado en tiempo real -->
+        <div class="lg:col-span-2 glass rounded-2xl p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-bolt text-amber-400"></i> Último Vehículo Recibido en Tiempo Real
+              </h2>
+              <p class="text-xs text-slate-400">M1 (Placa + OCR) · M2 (Segmentación Categoría) · M3 (Keypoints Ejes)</p>
+            </div>
+            <span id="live-last-time" class="text-xs font-mono px-2.5 py-1 rounded bg-slate-800 text-slate-300">--:--:--</span>
+          </div>
+
+          <div id="live-spotlight" class="grid grid-cols-1 md:grid-cols-2 gap-5 items-center">
+            <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video flex items-center justify-center">
+              <img id="live-img" src="/api/v1/evidencias/demo_1852PHD.svg" alt="Evidencia" class="w-full h-full object-cover" />
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-slate-400">Placa Normalizada:</span>
+                <span id="live-placa" class="font-mono text-2xl font-black px-3 py-1 rounded-lg bg-slate-900 border border-slate-700 text-emerald-400">1852PHD</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2.5 text-xs">
+                <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <p class="text-slate-400">Categoría (M2)</p>
+                  <p id="live-categoria" class="text-sm font-bold text-white uppercase mt-0.5">AUTO</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <p class="text-slate-400">N° de Ejes (M3)</p>
+                  <p id="live-ejes" class="text-sm font-bold text-amber-300 mt-0.5">2 ejes</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <p class="text-slate-400">Tarifa Cobrada</p>
+                  <p id="live-monto" class="text-sm font-bold text-emerald-400 mt-0.5">Bs. 7.00</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <p class="text-slate-400">Estado Paso</p>
+                  <p id="live-estado" class="text-sm font-bold text-emerald-400 uppercase mt-0.5">APROBADO</p>
+                </div>
+              </div>
+              <div class="text-xs text-slate-400 flex justify-between pt-1">
+                <span>Caseta: <strong id="live-caseta" class="text-slate-200">Caseta 1</strong></span>
+                <span>Propietario: <strong id="live-propietario" class="text-slate-200">Carlos Mendoza</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Envío de Frame / Prueba de Caseta en Vivo -->
+          <div class="pt-4 border-t border-slate-800">
+            <p class="text-xs font-semibold text-slate-300 mb-2.5">
+              <i class="fa-solid fa-camera mr-1 text-blue-400"></i> Enviar Frame de Caseta a <code class="text-blue-300">/api/v1/pasos/frame</code> (o usar App Móvil en Modo Caseta):
+            </p>
+            <div class="flex flex-wrap items-center gap-2">
+              <select id="sim-caseta-id" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                <option value="1">Caseta 1 - Carril Norte</option>
+                <option value="2">Caseta 2 - Carril Sur</option>
+                <option value="3">Caseta 3 - Carga Pesada</option>
+              </select>
+              <label class="cursor-pointer px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white transition">
+                <i class="fa-solid fa-upload mr-1"></i> Subir Frame Real (M1+M2+M3)
+                <input type="file" id="frame-upload-input" accept="image/*" class="hidden" onchange="enviarFrameArchivo(this)" />
+              </label>
+              <button onclick="simularPasoCaseta('1852PHD', 'auto', 2)" class="px-2.5 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-700 text-xs text-emerald-200 transition">
+                + Paso Auto (1852PHD)
+              </button>
+              <button onclick="simularPasoCaseta('5108TRK', 'camion', 4)" class="px-2.5 py-1.5 rounded-lg bg-sky-900/60 hover:bg-sky-800 border border-sky-700 text-xs text-sky-200 transition">
+                + Camión 4 Ejes (5108TRK)
+              </button>
+              <button onclick="simularPasoCaseta('4198LKM', 'auto', 2)" class="px-2.5 py-1.5 rounded-lg bg-amber-900/60 hover:bg-amber-800 border border-amber-700 text-xs text-amber-200 transition">
+                + Alerta Sin Saldo (4198LKM)
+              </button>
+              <button onclick="simularPasoCaseta('8842EVA', 'minibus', 2)" class="px-2.5 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 border border-red-700 text-xs text-red-200 transition">
+                + Alerta No Registrada (8842EVA)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alertas en tiempo real -->
+        <div class="glass rounded-2xl p-6 flex flex-col">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-triangle-exclamation text-red-400"></i> Alertas en Tiempo Real
+            </h2>
+            <button onclick="cambiarTab('alertas')" class="text-xs text-blue-400 hover:underline">Ver todas</button>
+          </div>
+          <div id="panel-alertas-list" class="space-y-3 overflow-y-auto max-h-96 pr-1 flex-1"></div>
+        </div>
+      </div>
+
+      <!-- Tabla de pasos recientes en tiempo real -->
+      <div class="glass rounded-2xl p-6">
+        <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-list-check text-blue-400"></i> Flujo de Vehículos Registrados en Vivo
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-slate-400 uppercase border-b border-slate-800">
+              <tr>
+                <th class="py-2.5 px-3">Evidencia</th>
+                <th class="py-2.5 px-3">Placa</th>
+                <th class="py-2.5 px-3">Propietario</th>
+                <th class="py-2.5 px-3">Categoría</th>
+                <th class="py-2.5 px-3">Ejes</th>
+                <th class="py-2.5 px-3">Monto</th>
+                <th class="py-2.5 px-3">Caseta</th>
+                <th class="py-2.5 px-3">Estado</th>
+                <th class="py-2.5 px-3">Hora</th>
+              </tr>
+            </thead>
+            <tbody id="panel-pasos-tbody" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. PÁGINA: VEHÍCULOS (CRUD + TARIFAS + LISTA BLANCA) -->
+    <section id="view-vehiculos" class="hidden space-y-6">
+      <div class="glass rounded-2xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-lg font-bold text-white">Padrón de Vehículos Registrados (CRUD)</h2>
+            <p class="text-xs text-slate-400">Gestión de placa, propietario, categoría, número de ejes y saldo prepago en Bs.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="vehiculo-search" type="text" placeholder="Buscar placa o propietario..."
+              oninput="cargarVehiculos()"
+              class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white w-56" />
+            <button onclick="abrirModalVehiculo()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition">
+              <i class="fa-solid fa-plus mr-1"></i> Nuevo Vehículo
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-slate-400 uppercase border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-3">ID</th>
+                <th class="py-3 px-3">Placa</th>
+                <th class="py-3 px-3">Propietario</th>
+                <th class="py-3 px-3">Categoría</th>
+                <th class="py-3 px-3">Ejes</th>
+                <th class="py-3 px-3">Saldo (Bs.)</th>
+                <th class="py-3 px-3">Activo</th>
+                <th class="py-3 px-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="vehiculos-tbody" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tarifas y Lista Blanca OAuth (Solo Administradores) -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass rounded-2xl p-6">
+          <h3 class="text-sm font-bold text-white mb-3"><i class="fa-solid fa-tags text-emerald-400 mr-1.5"></i> Tarifario Oficial por Categoría y Ejes</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="text-slate-400 border-b border-slate-800">
+                <tr><th class="py-2">Categoría (M2)</th><th class="py-2">Ejes (M3)</th><th class="py-2">Tarifa (Bs.)</th></tr>
+              </thead>
+              <tbody id="tarifas-tbody" class="divide-y divide-slate-800/60"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <h3 class="text-sm font-bold text-white mb-3"><i class="fa-solid fa-user-shield text-blue-400 mr-1.5"></i> Lista Blanca Google OAuth 2.0</h3>
+          <form onsubmit="agregarUsuarioListaBlanca(event)" class="flex flex-wrap gap-2 mb-4">
+            <input id="nuevo-user-email" type="email" required placeholder="correo@gmail.com"
+              class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white flex-1" />
+            <input id="nuevo-user-nombre" type="text" required placeholder="Nombre completo"
+              class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white w-36" />
+            <select id="nuevo-user-rol" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+              <option value="operador">Operador</option>
+              <option value="administrador">Administrador</option>
+            </select>
+            <button type="submit" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white">
+              Autorizar
+            </button>
+          </form>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="text-slate-400 border-b border-slate-800">
+                <tr><th class="py-2">Correo Google</th><th class="py-2">Nombre</th><th class="py-2">Rol</th></tr>
+              </thead>
+              <tbody id="usuarios-tbody" class="divide-y divide-slate-800/60"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. PÁGINA: HISTORIAL DE PASOS CON IMAGEN DE EVIDENCIA -->
+    <section id="view-pasos" class="hidden space-y-6">
+      <div class="glass rounded-2xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-lg font-bold text-white">Historial de Pasos con Imagen de Evidencia</h2>
+            <p class="text-xs text-slate-400">Cada registro conserva la placa leída, placa normalizada, confianza OCR, categoría, ejes, tarifa e imagen.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="pasos-filter-placa" type="text" placeholder="Filtrar por placa..."
+              oninput="cargarHistorialPasos()"
+              class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white" />
+            <select id="pasos-filter-estado" onchange="cargarHistorialPasos()"
+              class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+              <option value="">Todos los estados</option>
+              <option value="aprobado">Aprobado</option>
+              <option value="sin_saldo">Sin Saldo</option>
+              <option value="no_registrada">No Registrada</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-slate-400 uppercase border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-3">ID</th>
+                <th class="py-3 px-3">Evidencia</th>
+                <th class="py-3 px-3">Placa Leída</th>
+                <th class="py-3 px-3">Normalizada</th>
+                <th class="py-3 px-3">Conf. OCR</th>
+                <th class="py-3 px-3">Categoría</th>
+                <th class="py-3 px-3">Ejes</th>
+                <th class="py-3 px-3">Monto</th>
+                <th class="py-3 px-3">Caseta</th>
+                <th class="py-3 px-3">Estado</th>
+                <th class="py-3 px-3">Fecha y Hora</th>
+              </tr>
+            </thead>
+            <tbody id="historial-pasos-tbody" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. PÁGINA: ALERTAS -->
+    <section id="view-alertas" class="hidden space-y-6">
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h2 class="text-lg font-bold text-white">Centro de Alertas de Control de Peaje</h2>
+            <p class="text-xs text-slate-400">Generadas automáticamente al detectar una placa no registrada (posible evasión) o un vehículo sin saldo.</p>
+          </div>
+          <button onclick="cargarAlertas()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200">
+            <i class="fa-solid fa-rotate mr-1"></i> Actualizar
+          </button>
+        </div>
+        <div id="alertas-full-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </div>
+    </section>
+
+    <!-- 5. PÁGINA: AGENTE CONVERSACIONAL (QWEN FUNCTION CALLING) -->
+    <section id="view-chat" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 glass rounded-2xl p-6 flex flex-col h-[560px]">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center">
+                <i class="fa-solid fa-robot text-purple-400 text-lg"></i>
+              </div>
+              <div>
+                <h2 class="text-base font-bold text-white">Agente Conversacional de Placas (Qwen API + Tools)</h2>
+                <p class="text-xs text-slate-400">Consulta por texto o imagen · Normaliza placa · Sugiere errores OCR (O↔0, I↔1, B↔8, S↔5)</p>
+              </div>
+            </div>
+            <span class="text-[11px] px-2.5 py-1 rounded-full bg-purple-950 text-purple-300 border border-purple-800">
+              Sin alucinación · 100% BD
+            </span>
+          </div>
+
+          <!-- Mensajes del chat -->
+          <div id="chat-messages" class="flex-1 overflow-y-auto space-y-4 pr-2">
+            <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs leading-relaxed text-slate-200">
+              👋 Hola, soy el **Agente Conversacional del Peaje** impulsado por **Qwen**. Escribe una placa o sube la foto de una placa para informarte su estado oficial entre los **4 estados del sistema**:
+              <ul class="list-disc list-inside mt-2 text-slate-400 space-y-1">
+                <li><strong class="text-emerald-400">Registrada y con paso</strong> (ej. <code>1852-PHD</code>, <code>4029CDX</code>)</li>
+                <li><strong class="text-sky-400">Registrada sin paso</strong> (ej. <code>5280BNC</code>, <code>3810RTY</code>)</li>
+                <li><strong class="text-amber-400">Identificada no registrada</strong> (ej. <code>9981EVA</code>)</li>
+                <li><strong class="text-red-400">No existe</strong> + sugerencia OCR (ej. <code>1B52-PH0</code> o <code>7777NOE</code>)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Formulario de envío de texto o imagen -->
+          <form onsubmit="enviarMensajeAgente(event)" class="mt-4 pt-3 border-t border-slate-800 flex items-center gap-2">
+            <label class="cursor-pointer px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition" title="Consultar placa por imagen (M1 + OCR)">
+              <i class="fa-solid fa-camera mr-1 text-purple-400"></i> Imagen
+              <input type="file" id="chat-image-input" accept="image/*" class="hidden" onchange="enviarImagenAgente(this)" />
+            </label>
+            <input id="chat-text-input" type="text" placeholder="Escribe una placa o consulta (ej. ¿Cuál es el estado de 1852-PHD?)..."
+              class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500" />
+            <button type="submit" class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white transition">
+              <i class="fa-solid fa-paper-plane mr-1"></i> Consultar
+            </button>
+          </form>
+        </div>
+
+        <!-- Botones de demostración de los 4 estados y corrección OCR (Sección 8) -->
+        <div class="glass rounded-2xl p-6 space-y-4">
+          <h3 class="text-sm font-bold text-white border-b border-slate-800 pb-2">
+            <i class="fa-solid fa-vial-circle-check text-purple-400 mr-1.5"></i> Pruebas Rápidas de los 4 Estados (Video Demo)
+          </h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Haz clic en cualquiera de estos casos para demostrar en vivo cómo el agente responde cada estado exigido en la rúbrica:
+          </p>
+          <div class="space-y-2.5">
+            <button onclick="probarConsultaAgente('¿Cuál es el estado de la placa 1852-phd?')"
+              class="w-full p-3 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-700/60 text-left transition">
+              <p class="text-xs font-bold text-emerald-300">1. Estado: Registrada y con paso</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>1852-phd</code> (normaliza y muestra fecha, caseta, categoría y monto)</p>
+            </button>
+
+            <button onclick="probarConsultaAgente('Consultar placa 5280-BNC')"
+              class="w-full p-3 rounded-xl bg-sky-950/40 hover:bg-sky-900/50 border border-sky-700/60 text-left transition">
+              <p class="text-xs font-bold text-sky-300">2. Estado: Registrada sin paso</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>5280-BNC</code> (registrada en padrón pero nunca pasó por peaje)</p>
+            </button>
+
+            <button onclick="probarConsultaAgente('Revisar placa 9981EVA')"
+              class="w-full p-3 rounded-xl bg-amber-950/40 hover:bg-amber-900/50 border border-amber-700/60 text-left transition">
+              <p class="text-xs font-bold text-amber-300">3. Estado: Identificada no registrada</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>9981EVA</code> (detectada por cámara en caseta pero no registrada)</p>
+            </button>
+
+            <button onclick="probarConsultaAgente('Estado de la placa 7777ZZZ')"
+              class="w-full p-3 rounded-xl bg-red-950/40 hover:bg-red-900/50 border border-red-700/60 text-left transition">
+              <p class="text-xs font-bold text-red-300">4. Estado: No existe</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>7777ZZZ</code> (sin registro en padrón ni pasos)</p>
+            </button>
+
+            <button onclick="probarConsultaAgente('1B52-PH0')"
+              class="w-full p-3 rounded-xl bg-purple-950/40 hover:bg-purple-900/50 border border-purple-700/60 text-left transition">
+              <p class="text-xs font-bold text-purple-300">5. Error probable de OCR (B↔8, 0↔D)</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>1B52-PH0</code> → Sugiere: <em>"¿Quisiste decir 1852PHD?"</em></p>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. PÁGINA: ESTADO DEL ENDPOINT DE INFERENCIA (RUNPOD / GOOGLE COLAB) -->
+    <section id="view-estado" class="hidden space-y-6">
+      <div class="glass rounded-2xl p-6 space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white">Estado del Endpoint de Inferencia en la Nube</h2>
+            <p class="text-xs text-slate-400">Monitoreo en vivo de <code>INFERENCE_URL</code> (RunPod o Google Colab) que sirve M1, M2 y M3.</p>
+          </div>
+          <button onclick="verificarEstadoInferencia()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition">
+            <i class="fa-solid fa-satellite-dish mr-1.5"></i> Probar Conexión Ahora
+          </button>
+        </div>
+
+        <div id="inferencia-status-card" class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800">
+          <p class="text-xs text-slate-400">Consultando estado del servidor GPU...</p>
+        </div>
+
+        <!-- Formulario para actualizar INFERENCE_URL en caliente (RunPod <-> Colab) -->
+        <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
+          <h3 class="text-sm font-bold text-white">
+            <i class="fa-solid fa-sliders text-blue-400 mr-1.5"></i> Configurar <code class="text-blue-300">INFERENCE_URL</code> (Intercambio RunPod / Google Colab)
+          </h3>
+          <p class="text-xs text-slate-400">
+            Según la Sección 3 de la guía, cambiar entre RunPod (<code>https://POD_ID-8000.proxy.runpod.net</code>) y Google Colab (<code>https://xxxx.trycloudflare.com</code>) es solo cambiar esta URL:
+          </p>
+          <form onsubmit="guardarConfigInferencia(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input id="input-inference-url" type="url" required placeholder="https://abc123-8000.proxy.runpod.net"
+              class="md:col-span-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white font-mono" />
+            <input id="input-inference-token" type="text" placeholder="X-API-Token (opcional)"
+              class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white font-mono" />
+            <div class="md:col-span-3 flex justify-end">
+              <button type="submit" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition">
+                Guardar INFERENCE_URL
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL CRUD VEHÍCULO -->
+  <div id="modal-vehiculo" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+    <div class="glass max-w-md w-full rounded-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 id="modal-vehiculo-titulo" class="text-base font-bold text-white">Registrar Vehículo</h3>
+        <button onclick="cerrarModalVehiculo()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="guardarVehiculoModal(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="form-veh-id" />
+        <div>
+          <label class="block text-slate-300 mb-1">Placa (se normalizará automáticamente)</label>
+          <input id="form-veh-placa" type="text" required placeholder="Ej: 1852PHD"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-white uppercase font-mono" />
+        </div>
+        <div>
+          <label class="block text-slate-300 mb-1">Propietario</label>
+          <input id="form-veh-propietario" type="text" required placeholder="Nombre completo o empresa"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-white" />
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-slate-300 mb-1">Categoría</label>
+            <select id="form-veh-categoria" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white">
+              <option value="moto">Moto</option>
+              <option value="auto" selected>Auto</option>
+              <option value="minibus">Minibús</option>
+              <option value="camion">Camión</option>
+              <option value="bus">Bus</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Ejes</label>
+            <input id="form-veh-ejes" type="number" min="2" max="8" value="2" required
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Saldo (Bs.)</label>
+            <input id="form-veh-saldo" type="number" step="0.5" min="0" value="100" required
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-3">
+          <button type="button" onclick="cerrarModalVehiculo()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300">Cancelar</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-white">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL IMAGEN EVIDENCIA -->
+  <div id="modal-evidencia" onclick="this.classList.add('hidden')" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4">
+    <div class="max-w-3xl w-full glass rounded-2xl p-4 space-y-3" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center">
+        <h4 id="modal-evidencia-titulo" class="text-sm font-bold text-white">Imagen de Evidencia</h4>
+        <button onclick="document.getElementById('modal-evidencia').classList.add('hidden')" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <img id="modal-evidencia-img" src="" alt="Evidencia" class="w-full rounded-xl border border-slate-700 max-h-[75vh] object-contain bg-slate-950" />
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

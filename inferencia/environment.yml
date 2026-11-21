@@ -1,0 +1,22 @@
+name: peaje_inferencia
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.9
+  - pip=24.2
+  - numpy=1.26.4
+  - opencv=4.10.0
+  - pillow=10.4.0
+  - pip:
+      - torch==2.4.1
+      - torchvision==0.19.1
+      - ultralytics==8.3.27
+      - easyocr==1.7.2
+      - fastapi==0.115.4
+      - uvicorn[standard]==0.32.0
+      - python-multipart==0.0.17
+      - opencv-python-headless==4.10.0.84
+      - pydantic==2.9.2

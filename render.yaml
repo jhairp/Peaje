@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: peaje-ia-iam811
+    runtime: python
+    rootDir: web
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///./peaje.db
+      - key: ADMIN_EMAILS
+        value: doc.alvaro.pinto.ma@unifranz.edu.bo,jhairpinto8@gmail.com
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: INFERENCE_URL
+        sync: false
+      - key: INFERENCE_API_TOKEN
+        value: token_secreto_inferencia_peaje_2026
+      - key: QWEN_API_KEY
+        sync: false
+      - key: QWEN_BASE_URL
+        value: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+      - key: QWEN_MODEL
+        value: qwen-plus
