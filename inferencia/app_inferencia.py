@@ -636,17 +636,74 @@ async def _extraer_imagen_bgr(request: Request, file: Optional[UploadFile] = Non
 
 @app.get("/health")
 def health():
+    import urllib.request
     motor = obtener_motor()
+    ollama_ok = False
+    ollama_model = os.environ.get("OLLAMA_MODEL", "qwen3:1.7b")
+    try:
+        r = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
+        if r.status == 200:
+            ollama_ok = True
+    except Exception:
+        ollama_ok = False
+
     return {
         "estado": "ok",
         "dispositivo": str(DEVICE_NAME),
         "cuda_disponible": torch.cuda.is_available(),
+        "ollama_ok": ollama_ok,
+        "ollama_model": ollama_model,
         "modelos": {
             "m1_placas_ocr": motor.m1_nombre,
             "m2_segmentacion": motor.m2_nombre,
             "m3_keypoints_ejes": motor.m3_nombre,
+            "agente_llm": f"ollama/{ollama_model}" if ollama_ok else "verificador_bd",
         },
     }
+
+
+@app.post("/llm-chat")
+async def llm_chat_ollama(
+    request: Request,
+    x_api_token: Optional[str] = Header(default=None),
+):
+    """
+    Endpoint que conecta con Ollama (qwen3:1.7b) corriendo en el mismo Colab o RunPod
+    (exactamente como en colab_server_v2.ipynb), sin necesidad de pagar ni registrar API Key externa.
+    """
+    _verificar_token(x_api_token)
+    import urllib.request
+
+    body = await request.json()
+    messages = body.get("messages", [])
+    model_name = body.get("model") or os.environ.get("OLLAMA_MODEL", "qwen3:1.7b")
+
+    payload = json.dumps(
+        {
+            "model": model_name,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": 0.0, "num_predict": 380},
+        }
+    ).encode("utf-8")
+
+    def _llamar_ollama():
+        req = urllib.request.Request(
+            "http://localhost:11434/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            contenido = data.get("message", {}).get("content", "")
+            # Limpiar bloques <think>...</think> de qwen3 para mostrar solo la respuesta final limpia
+            contenido = re.sub(r"<think>.*?</think>", "", contenido, flags=re.DOTALL).strip()
+            return {"ok": True, "modelo": model_name, "respuesta": contenido}
+
+    try:
+        return await run_in_threadpool(_llamar_ollama)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Ollama ({model_name}) no disponible: {e}")
 
 
 @app.post("/predict")

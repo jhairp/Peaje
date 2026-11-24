@@ -196,10 +196,15 @@ def consultar_agente_qwen(
     mensaje_usuario: str,
     placa_directa: Optional[str] = None,
     origen: str = "texto",
+    inference_url: Optional[str] = None,
+    inference_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Ejecuta el Agente Conversacional con Qwen (vía API Key compatible con OpenAI Function Calling).
-    Extrae y normaliza la placa, ejecuta la tool contra la BD y devuelve la respuesta junto con el payload estructurado.
+    Ejecuta el Agente Conversacional con Qwen:
+      1. Primero intenta usar Ollama (qwen3:1.7b) corriendo en el mismo Colab/RunPod via INFERENCE_URL/llm-chat
+         (exactamente como en colab_server_v2.ipynb, sin necesitar API Key de pago).
+      2. Si se configuró QWEN_API_KEY externa, también la soporta.
+      3. Siempre valida contra los datos reales de la Tool de BD (tool_consultar_placa_bd) para no inventar información.
     """
     candidato_placa = placa_directa or extraer_placa_de_mensaje(mensaje_usuario)
     if not candidato_placa and mensaje_usuario:
@@ -211,7 +216,7 @@ def consultar_agente_qwen(
             "estado": "Placa no detectada",
             "placa_normalizada": "",
             "sugerencias_ocr": [],
-            "modelo_agente": os.environ.get("QWEN_MODEL", "qwen-plus"),
+            "modelo_agente": os.environ.get("QWEN_MODEL", "qwen3:1.7b (Ollama Colab/RunPod)"),
             "respuesta": (
                 "No pude identificar un número de placa válido en tu consulta. "
                 "Por favor ingresa una placa (por ejemplo: `1852-PHD`, `3810RTY`, `9981EVA`) o sube otra imagen donde la placa sea legible."
@@ -223,98 +228,58 @@ def consultar_agente_qwen(
     datos_tool = tool_consultar_placa_bd(db, candidato_placa)
     respuesta_base = redactar_respuesta_verificada(datos_tool, origen=origen)
 
-    qwen_api_key = os.environ.get("QWEN_API_KEY", "").strip()
-    qwen_base_url = os.environ.get(
-        "QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-    ).strip()
-    qwen_model = os.environ.get("QWEN_MODEL", "qwen-plus").strip()
+    url_inf = (inference_url or os.environ.get("INFERENCE_URL", "")).strip().rstrip("/")
+    tok_inf = (inference_token or os.environ.get("INFERENCE_API_TOKEN", "")).strip()
+    qwen_model = os.environ.get("QWEN_MODEL", "qwen3:1.7b").strip()
+
+    system_prompt = (
+        "Eres el Agente Inteligente de Control de Peaje (IAM-811). /no_think\n"
+        "REGLAS ESTRICTAS:\n"
+        "1. Responde ÚNICAMENTE con los datos verificados de la Base de Datos que se te entregan. Prohibido inventar fechas, saldos, nombres o pasos.\n"
+        "2. Debes indicar explícitamente el estado exacto: "
+        f"'{datos_tool['estado']}'.\n"
+        "3. Si el estado es 'Registrada y con paso', indica propietario, saldo, fecha del paso, caseta, categoría y monto en Bs.\n"
+        "4. Si hay sugerencias_ocr en los datos, incluye la pregunta: '¿Quisiste decir ...?' mencionando las placas sugeridas.\n"
+        "5. Responde en español conciso y claro."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": (
+                f"Consulta ({origen}): {mensaje_usuario or candidato_placa}\n"
+                f"Resultado oficial de la Tool BD:\n{json.dumps(datos_tool, ensure_ascii=False)}\n"
+                f"Resumen verificado:\n{respuesta_base}"
+            ),
+        },
+    ]
 
     respuesta_final = respuesta_base
-    usando_qwen_api = False
+    etiqueta_modelo = f"Ollama ({qwen_model}) + Tool BD"
 
-    # Si hay una API Key real configurada para Qwen, invocamos Qwen con Function Calling
-    if qwen_api_key and not qwen_api_key.startswith("sk-tu-api-key"):
+    # 1. Intentar con Ollama (qwen3:1.7b) corriendo en Colab / RunPod en INFERENCE_URL/llm-chat
+    if url_inf and "tu-pod-id" not in url_inf:
         try:
-            from openai import OpenAI
+            import requests as req_sync
 
-            client = OpenAI(api_key=qwen_api_key, base_url=qwen_base_url, timeout=15.0)
-            tools_schema = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "tool_consultar_placa_bd",
-                        "description": "Consulta el estado oficial de una placa en la base de datos del peaje.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "placa": {
-                                    "type": "string",
-                                    "description": "Placa normalizada en mayúsculas sin espacios ni guiones.",
-                                }
-                            },
-                            "required": ["placa"],
-                        },
-                    },
-                }
-            ]
-
-            system_prompt = (
-                "Eres el Agente Inteligente de Control de Peaje (IAM-811). "
-                "REGLAS ESTRICTAS:\n"
-                "1. Responde ÚNICAMENTE con los datos devueltos por la herramienta tool_consultar_placa_bd. Prohibido inventar fechas, saldos, nombres o pasos.\n"
-                "2. Debes indicar explícitamente uno de estos cuatro estados exactos: "
-                "'Registrada y con paso', 'Registrada sin paso', 'Identificada no registrada' o 'No existe'.\n"
-                "3. Si estado es 'Registrada y con paso', incluye fecha, caseta, categoría y monto en Bs.\n"
-                "4. Si hay sugerencias_ocr en los datos, pregúntale al usuario: '¿Quisiste decir ...?' mencionando las placas sugeridas.\n"
-                "5. Responde en español conciso y bien formateado."
+            headers = {"Content-Type": "application/json"}
+            if tok_inf:
+                headers["X-API-Token"] = tok_inf
+            r_ollama = req_sync.post(
+                f"{url_inf}/llm-chat",
+                json={"model": qwen_model if ":" in qwen_model else "qwen3:1.7b", "messages": messages},
+                headers=headers,
+                timeout=12,
             )
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": f"Consulta del operador ({origen}): {mensaje_usuario or candidato_placa}\n"
-                    f"Datos verificados de la Tool BD:\n{json.dumps(datos_tool, ensure_ascii=False)}",
-                },
-            ]
-
-            completion = client.chat.completions.create(
-                model=qwen_model,
-                messages=messages,
-                tools=tools_schema,
-                temperature=0.0,
-                max_tokens=450,
-            )
-            msg = completion.choices[0].message
-
-            # Si Qwen solicitó ejecutar tool_calls, le devolvemos el resultado de la tool y cerramos el ciclo
-            if getattr(msg, "tool_calls", None):
-                messages.append(msg)
-                for tc in msg.tool_calls:
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": json.dumps(datos_tool, ensure_ascii=False),
-                        }
-                    )
-                completion2 = client.chat.completions.create(
-                    model=qwen_model,
-                    messages=messages,
-                    temperature=0.0,
-                    max_tokens=450,
-                )
-                texto_llm = (completion2.choices[0].message.content or "").strip()
-            else:
-                texto_llm = (msg.content or "").strip()
-
-            # Validar que la respuesta del LLM contenga el estado oficial exacto antes de aceptarla
-            if texto_llm and datos_tool["estado"].lower() in texto_llm.lower():
-                respuesta_final = texto_llm
-                usando_qwen_api = True
+            if r_ollama.status_code == 200:
+                data_o = r_ollama.json()
+                txt_o = (data_o.get("respuesta") or "").strip()
+                if txt_o and datos_tool["estado"].lower() in txt_o.lower():
+                    respuesta_final = txt_o
+                    etiqueta_modelo = f"Ollama {data_o.get('modelo', 'qwen3:1.7b')} (Colab/RunPod)"
         except Exception:
-            # Si falla la red externa o límite de cuota, se mantiene respuesta_base 100% verificada
-            respuesta_final = respuesta_base
+            pass
 
     return {
         "exito": True,
@@ -324,7 +289,7 @@ def consultar_agente_qwen(
         "formato_valido": datos_tool["formato_valido"],
         "estado": datos_tool["estado"],
         "sugerencias_ocr": datos_tool["sugerencias_ocr"],
-        "modelo_agente": f"{qwen_model} (Function Calling)" if usando_qwen_api else f"{qwen_model} + Verificador BD Determinista",
+        "modelo_agente": etiqueta_modelo,
         "respuesta": respuesta_final,
         "datos_bd": datos_tool,
     }

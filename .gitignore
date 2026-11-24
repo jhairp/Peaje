@@ -12,6 +12,8 @@ conda-env/
 client_secret*.json
 google-services.json
 service-account*.json
+*.keystore
+*.jks
 
 # Python
 __pycache__/

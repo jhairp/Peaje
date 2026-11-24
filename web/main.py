@@ -474,7 +474,14 @@ def consultar_placa_por_texto(
     db: Session = Depends(get_db),
 ):
     """Consulta una placa por texto, la normaliza y devuelve su estado entre los 4 estados del sistema."""
-    return consultar_agente_qwen(db, mensaje_usuario=req.placa, placa_directa=req.placa, origen="texto")
+    return consultar_agente_qwen(
+        db,
+        mensaje_usuario=req.placa,
+        placa_directa=req.placa,
+        origen="texto",
+        inference_url=CONFIG_SISTEMA["inference_url"],
+        inference_token=CONFIG_SISTEMA["inference_api_token"],
+    )
 
 
 @app.post("/api/v1/placas/consultar-imagen", tags=["Consultas de Placas"])
@@ -543,6 +550,8 @@ async def consultar_placa_por_imagen(
         mensaje_usuario=f"Imagen de placa leída por OCR: {placa_detectada}",
         placa_directa=placa_detectada,
         origen="imagen",
+        inference_url=CONFIG_SISTEMA["inference_url"],
+        inference_token=CONFIG_SISTEMA["inference_api_token"],
     )
     respuesta_agente["confianza_ocr"] = round(conf_ocr, 3)
     respuesta_agente["latencia_ocr_ms"] = res_ocr.get("latencia", 0.0)
@@ -648,6 +657,8 @@ async def chat_agente_conversacional(
         mensaje_usuario=texto_msg,
         placa_directa=placa_directa,
         origen="texto",
+        inference_url=CONFIG_SISTEMA["inference_url"],
+        inference_token=CONFIG_SISTEMA["inference_api_token"],
     )
 
 
