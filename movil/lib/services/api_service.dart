@@ -42,6 +42,33 @@ class ApiService {
     }
   }
 
+  /// POST /api/v1/auth/google-oauth-verify
+  /// Autentica la cuenta de Google seleccionada contra la Lista Blanca en el servidor en la nube.
+  static Future<Map<String, dynamic>> loginConCuentaGoogle({
+    required String email,
+    required String nombre,
+  }) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/api/v1/auth/google-oauth-verify');
+    final resp = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'nombre': nombre}),
+    );
+
+    final body = jsonDecode(utf8.decode(resp.bodyBytes));
+    if (resp.statusCode == 200) {
+      tokenSesion = body['access_token'];
+      usuarioActual = body['usuario'];
+      return {'ok': true, 'usuario': usuarioActual};
+    } else {
+      return {
+        'ok': false,
+        'status': resp.statusCode,
+        'error': body['detail'] ?? 'Acceso denegado por lista blanca',
+      };
+    }
+  }
+
   /// POST /api/v1/pasos/frame (Modo Caseta: envía frame JPEG capturado a 2-5 fps)
   static Future<Map<String, dynamic>> enviarFrameCaseta({
     required Uint8List bytesJpeg,
