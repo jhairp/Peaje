@@ -268,9 +268,9 @@ def consultar_agente_qwen(
                 headers["X-API-Token"] = tok_inf
             r_ollama = req_sync.post(
                 f"{url_inf}/llm-chat",
-                json={"model": qwen_model if ":" in qwen_model else "qwen3:1.7b", "messages": messages},
+                json={"messages": messages},
                 headers=headers,
-                timeout=12,
+                timeout=25,
             )
             if r_ollama.status_code == 200:
                 data_o = r_ollama.json()

@@ -148,8 +148,8 @@ El script `diagnosticar_entorno.py` genera los archivos `diagnostico_<servicio>.
 
 ## 6. Enlaces del Proyecto (Sección 7)
 
-- **Subdominio de la Aplicación Web en Producción:** `https://peaje-ia.tudominio.com` *(Actualizar con la URL final del subdominio antes de entregar)*
-- **Documentación Interactiva de la API (Swagger / OpenAPI):** `https://peaje-ia.tudominio.com/docs`
+- **Subdominio de la Aplicación Web en Producción:** [https://peaje-62tb.onrender.com](https://peaje-62tb.onrender.com)
+- **Documentación Interactiva de la API (Swagger / OpenAPI):** [https://peaje-62tb.onrender.com/docs](https://peaje-62tb.onrender.com/docs)
 - **Endpoint de Inferencia GPU (`INFERENCE_URL`):** `https://<POD_ID>-8000.proxy.runpod.net` (RunPod) o `https://<TUNNEL>.trycloudflare.com` (Colab)
 - **Dataset M2 (Segmentación de Vehículos en Roboflow):** `https://universe.roboflow.com/peaje-iam811/segmentacion-vehiculos-peaje`
 - **Dataset M3 (Keypoints de Ruedas / Ejes en Roboflow):** `https://universe.roboflow.com/peaje-iam811/keypoints-ruedas-ejes`

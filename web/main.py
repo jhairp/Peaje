@@ -1025,7 +1025,7 @@ def generar_evidencia_svg_demo(nombre_placa: str):
     return Response(content=svg, media_type="image/svg+xml")
 
 
-@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
 def servir_aplicacion_web():
     ruta_html = os.path.join(STATIC_DIR, "index.html")
     if os.path.isfile(ruta_html):

@@ -1,0 +1,46 @@
+name: Compilar APK Android (TelePeaje IA)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 3. Configurar Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.3'
+          channel: 'stable'
+
+      - name: 4. Preparar estructura Android y compilar APK
+        working-directory: movil
+        run: |
+          mkdir -p ~/.android
+          cp android/debug.keystore ~/.android/debug.keystore
+          cp -r lib /tmp/lib_backup
+          cp pubspec.yaml /tmp/pubspec_backup.yaml
+          flutter create --platforms=android --org bo.edu.unifranz.iam811 --project-name peaje_ia_movil .
+          cp -r /tmp/lib_backup/* lib/
+          cp /tmp/pubspec_backup.yaml pubspec.yaml
+          # Asegurar permisos de INTERNET y CAMERA en AndroidManifest.xml
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/><uses-permission android:name="android.permission.CAMERA"\/><application/' android/app/src/main/AndroidManifest.xml
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+
+      - name: 5. Subir APK compilado como Artefacto descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: TelePeaje-IA-APK
+          path: movil/build/app/outputs/flutter-apk/app-release.apk

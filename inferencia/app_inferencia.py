@@ -676,7 +676,8 @@ async def llm_chat_ollama(
 
     body = await request.json()
     messages = body.get("messages", [])
-    model_name = body.get("model") or os.environ.get("OLLAMA_MODEL", "qwen3:1.7b")
+    # Usar siempre el OLLAMA_MODEL cargado en el servidor GPU (Colab / RunPod)
+    model_name = os.environ.get("OLLAMA_MODEL") or body.get("model") or "qwen3:1.7b"
 
     payload = json.dumps(
         {
