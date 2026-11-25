@@ -267,6 +267,7 @@ function renderFilaPasoHTML(p, animado = true) {
       <td class="py-2.5 px-3 text-slate-300">${p.propietario}</td>
       <td class="py-2.5 px-3 uppercase font-semibold text-sky-300">${p.categoria_detectada}</td>
       <td class="py-2.5 px-3 text-amber-300 font-semibold">${p.ejes_detectados}</td>
+      <td class="py-2.5 px-3 text-purple-300 font-semibold">${p.pasajeros || 1}</td>
       <td class="py-2.5 px-3 font-bold text-emerald-400">Bs. ${Number(p.monto).toFixed(2)}</td>
       <td class="py-2.5 px-3 text-slate-400">${p.caseta_nombre}</td>
       <td class="py-2.5 px-3">${badgeEstadoPaso(p.estado)}</td>

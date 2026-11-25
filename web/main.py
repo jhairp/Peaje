@@ -28,7 +28,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from agent_qwen import consultar_agente_qwen, tool_consultar_placa_bd
@@ -67,6 +67,11 @@ load_dotenv()
 # Crear tablas e insertar datos semilla (>=20 vehículos, tarifas, casetas, admin docente y jhairpinto8)
 Base.metadata.create_all(bind=engine)
 with SessionLocal() as _db_init:
+    try:
+        _db_init.execute(text("ALTER TABLE pasos ADD COLUMN pasajeros INTEGER DEFAULT 1"))
+        _db_init.commit()
+    except Exception:
+        _db_init.rollback()
     ejecutar_seed(_db_init)
 
 UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
@@ -151,6 +156,7 @@ def serializar_paso(db: Session, paso: Paso) -> Dict[str, Any]:
         "confianza_ocr": round(float(paso.confianza_ocr), 3),
         "categoria_detectada": paso.categoria_detectada,
         "ejes_detectados": paso.ejes_detectados,
+        "pasajeros": getattr(paso, "pasajeros", 1) or 1,
         "monto": round(float(paso.monto), 2),
         "caseta_id": paso.caseta_id,
         "caseta_nombre": caseta.nombre if caseta else f"Caseta #{paso.caseta_id}",
@@ -362,6 +368,7 @@ async def procesar_frame_caseta(
         categoria_override or resultado_inf.get("categoria") or "auto"
     ).lower().strip()
     ejes_det = int(ejes_override or resultado_inf.get("ejes") or 2)
+    pasajeros_det = int(resultado_inf.get("pasajeros") or 1)
     latencia_inf = float(resultado_inf.get("latencia") or resultado_inf.get("latencia_ms") or 0.0)
 
     # Guardar imagen de evidencia (anotada por el servidor de inferencia o el frame original)
@@ -403,6 +410,7 @@ async def procesar_frame_caseta(
         confianza_ocr=confianza_ocr,
         categoria_detectada=categoria_det,
         ejes_detectados=ejes_det,
+        pasajeros=pasajeros_det,
         monto=monto_tarifa,
         caseta_id=caseta_id,
         usuario_id=usuario.id,
@@ -453,6 +461,7 @@ async def procesar_frame_caseta(
         "confianza": round(confianza_ocr, 3),
         "categoria": nuevo_paso.categoria_detectada,
         "ejes": nuevo_paso.ejes_detectados,
+        "pasajeros": nuevo_paso.pasajeros,
         "tarifa": monto_tarifa,
         "monto": monto_tarifa,
         "estado": nuevo_paso.estado,

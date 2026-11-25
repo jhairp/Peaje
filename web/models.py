@@ -70,6 +70,7 @@ class Paso(Base):
     confianza_ocr = Column(Float, nullable=False, default=0.0)
     categoria_detectada = Column(String(40), nullable=False, default="auto")
     ejes_detectados = Column(Integer, nullable=False, default=2)
+    pasajeros = Column(Integer, nullable=False, default=1)
     monto = Column(Float, nullable=False, default=0.0)
     caseta_id = Column(Integer, ForeignKey("casetas.id"), nullable=False, default=1)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)

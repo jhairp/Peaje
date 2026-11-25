@@ -85,6 +85,132 @@ COLORES_BGR = {
     "bus": (60, 76, 231),
 }
 
+# Definición de los 5 keypoints por llanta (según keypoints_llantas_yolo_detectron2_v3.ipynb del docente)
+KPT_NOMBRES = ["centro", "contacto", "superior", "izquierda", "derecha"]
+KPT_COLORES_BGR = [
+    (255, 255, 255),  # 0: centro (blanco)
+    (0, 0, 255),      # 1: contacto con el suelo (rojo)
+    (255, 200, 0),    # 2: superior (celeste)
+    (0, 255, 0),      # 3: izquierda (verde)
+    (255, 0, 255),    # 4: derecha (magenta)
+]
+ESQUELETO_LLANTA = [(0, 1), (0, 2), (0, 3), (0, 4)]
+UMBRAL_KP = 0.05
+UMBRAL_CONTENCION = 0.70
+UMBRAL_CERCANA = 0.65
+SEPARACION_EJE = 0.60
+
+PROMPTS_VEHICULO_YOLOE = {
+    "motorcycle": "moto",
+    "motorbike": "moto",
+    "car": "auto",
+    "sedan": "auto",
+    "bus": "bus",
+    "minibus": "minibus",
+    "van": "minibus",
+    "truck": "camion",
+}
+PROMPTS_LLANTA_YOLOE = ["wheel", "tire", "car wheel"]
+
+
+def kps_de_mascara_llanta(mask: np.ndarray) -> Optional[np.ndarray]:
+    """
+    Extrae los 5 keypoints geométricos de una llanta a partir de su máscara
+    (centro por elipse ajustada, contacto, superior, izquierda, derecha) -> shape (5, 3).
+    """
+    cnts, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not cnts:
+        return None
+    c = max(cnts, key=cv2.contourArea)
+    if cv2.contourArea(c) < 8:
+        return None
+    pts = c.reshape(-1, 2).astype(float)
+    if len(pts) >= 5:
+        (cx, cy), _, _ = cv2.fitEllipse(c)
+    else:
+        cx, cy = pts.mean(0)
+    contacto = pts[pts[:, 1].argmax()]
+    superior = pts[pts[:, 1].argmin()]
+    izquierda = pts[pts[:, 0].argmin()]
+    derecha = pts[pts[:, 0].argmax()]
+    k = np.array([[cx, cy], contacto, superior, izquierda, derecha], dtype=float)
+    return np.concatenate([k, np.ones((5, 1), dtype=float)], axis=1)
+
+
+def kps_de_circulo_llanta(cx: float, cy: float, r: float, conf: float = 0.82) -> np.ndarray:
+    """Construye los 5 keypoints [centro, contacto, superior, izquierda, derecha] desde un círculo (cx, cy, r)."""
+    return np.array(
+        [
+            [cx, cy, conf],
+            [cx, cy + r, conf],
+            [cx, cy - r, conf],
+            [cx - r, cy, conf],
+            [cx + r, cy, conf],
+        ],
+        dtype=float,
+    )
+
+
+def altura_visible_llanta(l: Dict[str, Any]) -> float:
+    kps = l["kps"]
+    if len(kps) >= 3:
+        return max(1.0, float(kps[1][1] - kps[2][1]))
+    box = l.get("box", [0, 0, 10, 10])
+    return max(1.0, float(box[3] - box[1]))
+
+
+def _contenida(a: List[float], b: List[float]) -> float:
+    x1, y1 = max(a[0], b[0]), max(a[1], b[1])
+    x2, y2 = min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    area = max(1e-6, (a[2] - a[0]) * (a[3] - a[1]))
+    return inter / area
+
+
+def limpiar_llantas(llantas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Descarta detecciones contenidas dentro de otra (ej. el aro dentro de la llanta)."""
+    orden = sorted(
+        llantas,
+        key=lambda l: -(l["box"][2] - l["box"][0]) * (l["box"][3] - l["box"][1]),
+    )
+    res: List[Dict[str, Any]] = []
+    for l in orden:
+        if all(_contenida(l["box"], r["box"]) < UMBRAL_CONTENCION for r in res):
+            res.append(l)
+    return res
+
+
+def analizar_ejes_vehiculo(caja_vehiculo: Optional[List[int]], llantas: List[Dict[str, Any]], categoria: str) -> Tuple[int, str, List[Dict[str, Any]]]:
+    """
+    Algoritmo del notebook keypoints_llantas_yolo_detectron2_v3.ipynb:
+    Filtra las llantas del lado cercano (altura >= 0.65 * hmax), agrupa por SEPARACION_EJE * diámetro
+    (para que ruedas dobles traseras cuenten como 1 solo eje) y estima el número de ejes y la vista.
+    """
+    llantas_limpias = limpiar_llantas(llantas)
+    if not llantas_limpias:
+        ejes_def = 3 if categoria in ("camion", "bus") else 2
+        return ejes_def, "frontal/estimada", []
+
+    hmax = max(altura_visible_llanta(l) for l in llantas_limpias)
+    cercanas = [l for l in llantas_limpias if altura_visible_llanta(l) >= UMBRAL_CERCANA * hmax]
+    if not cercanas:
+        cercanas = llantas_limpias
+
+    xs = sorted(float(l["kps"][0][0]) for l in cercanas)
+    diam = float(np.median([altura_visible_llanta(l) for l in cercanas]))
+    ejes = 1 + sum(1 for p, q in zip(xs, xs[1:]) if (q - p) > SEPARACION_EJE * diam)
+
+    anchos = [(float(l["kps"][4][0]) - float(l["kps"][3][0])) / altura_visible_llanta(l) for l in cercanas if len(l["kps"]) >= 5]
+    redondez = float(np.median(anchos)) if anchos else 0.9
+    vista = "lateral" if redondez > 0.8 else "3/4"
+
+    if ejes < 2:
+        ejes = 3 if categoria in ("camion", "bus") else 2
+    if categoria in ("moto", "auto", "minibus"):
+        ejes = 2
+
+    return min(int(ejes), 6), vista, cercanas
+
 MAPA_A_DIGITO = {
     "O": "0",
     "Q": "0",
@@ -164,16 +290,28 @@ class MotorInferenciaPeaje:
             self.m2_nombre = "ultralytics/yolo11n-seg"
             self.m2_es_custom = False
 
-        # --- M3: Keypoints sobre Ruedas (Número de Ejes) ---
-        ruta_m3 = self._resolver_ruta(MODEL_M3_PATH, "m3_ruedas_pose.pt")
+        # --- M3: Keypoints sobre Ruedas (5 keypoints por llanta: centro, contacto, superior, izquierda, derecha) ---
+        ruta_m3 = (
+            self._resolver_ruta(MODEL_M3_PATH, "m3_ruedas_pose.pt")
+            or self._resolver_ruta("/content/runs/pose/llantas/weights/best.pt", "best.pt")
+        )
+        self.yoloe_llantas = None
         if ruta_m3:
             self.m3_pose = YOLO(ruta_m3)
-            self.m3_nombre = f"custom/{os.path.basename(ruta_m3)}"
+            self.m3_nombre = f"custom/{os.path.basename(ruta_m3)} (5-kpts)"
             self.m3_es_custom = True
         else:
-            self.m3_pose = YOLO("yolo11n-pose.pt")
-            self.m3_nombre = "ultralytics/yolo11n-pose+wheel_kp"
+            self.m3_pose = None
             self.m3_es_custom = False
+            try:
+                from ultralytics import YOLOE
+                self.yoloe_llantas = YOLOE("yoloe-11s-seg.pt")
+                nombres_yoloe = list(PROMPTS_VEHICULO_YOLOE.keys()) + PROMPTS_LLANTA_YOLOE
+                self.yoloe_llantas.set_classes(nombres_yoloe, self.yoloe_llantas.get_text_pe(nombres_yoloe))
+                self.m3_nombre = "yoloe-11s-seg+5_keypoints_llanta"
+            except Exception:
+                self.yoloe_llantas = None
+                self.m3_nombre = "geometric_5_keypoints_llanta"
 
         # Calentamiento en GPU/CPU
         dummy = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -301,6 +439,7 @@ class MotorInferenciaPeaje:
         res = self.m2_seg.predict(img_bgr, conf=CONF_M2, device=DEVICE, verbose=False)[0]
 
         detecciones = []
+        mascaras_pasajeros = []
         nombres_modelo = res.names or {}
 
         if len(res.boxes) > 0:
@@ -311,11 +450,20 @@ class MotorInferenciaPeaje:
 
             for i in range(len(cajas)):
                 nombre_raw = str(nombres_modelo.get(int(clases_id[i]), "")).lower().strip()
+                x1, y1, x2, y2 = map(int, cajas[i])
+
+                # Bonificación +5 pts (Sección 10): Identificación y conteo de pasajeros mediante segmentación
+                # (Solo máscara y conteo, sin reconocimiento facial ni recortes de rostros)
+                if nombre_raw in ("person", "persona", "pasajero"):
+                    m_pas = None
+                    if mascaras is not None and i < len(mascaras):
+                        m_pas = cv2.resize(mascaras[i], (w, h), interpolation=cv2.INTER_NEAREST) > 0.5
+                    mascaras_pasajeros.append({"caja": [x1, y1, x2, y2], "conf": float(scores[i]), "mask": m_pas})
+                    continue
+
                 cat = NORMALIZAR_CATEGORIA.get(nombre_raw)
                 if not cat:
                     continue
-
-                x1, y1, x2, y2 = map(int, cajas[i])
                 ancho_v, alto_v = max(1, x2 - x1), max(1, y2 - y1)
                 area_box = ancho_v * alto_v
 
@@ -357,16 +505,19 @@ class MotorInferenciaPeaje:
             caja_v = None
 
         ms = round((time.perf_counter() - t0) * 1000, 1)
+        pasajeros_conteo = max(1, len(mascaras_pasajeros))
         return {
             "categoria": categoria,
             "confianza_categoria": conf_cat,
             "caja_vehiculo": caja_v,
             "detecciones": detecciones,
+            "pasajeros": pasajeros_conteo,
+            "mascaras_pasajeros": mascaras_pasajeros,
             "latencia_m2_ms": ms,
         }
 
     # --------------------------------------------------------------------------
-    # M3: Keypoints sobre Ruedas -> Estimación de Número de Ejes
+    # M3: Keypoints sobre Ruedas (5 keypoints por llanta) -> Número de Ejes
     # --------------------------------------------------------------------------
     def ejecutar_m3_keypoints_ejes(
         self,
@@ -376,42 +527,66 @@ class MotorInferenciaPeaje:
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
         h, w = img_bgr.shape[:2]
-        keypoints_ruedas: List[List[float]] = []
+        llantas_detectadas: List[Dict[str, Any]] = []
 
-        # 1. Ejecutar modelo YOLO-pose (M3)
-        if self.m3_es_custom:
+        # 1. Modelo YOLO-pose entrenado con kpt_shape [5, 3] (centro, contacto, superior, izquierda, derecha)
+        if self.m3_es_custom and self.m3_pose is not None:
             res = self.m3_pose.predict(img_bgr, conf=CONF_M3, device=DEVICE, verbose=False)[0]
             if res.keypoints is not None and len(res.boxes) > 0:
-                xy = res.keypoints.xy.cpu().numpy()  # (N, K, 2)
-                conf = (
+                xy = res.keypoints.xy.cpu().numpy()
+                kc = (
                     res.keypoints.conf.cpu().numpy()
                     if res.keypoints.conf is not None
                     else np.ones(xy.shape[:2])
                 )
-                for i in range(xy.shape[0]):
-                    for k in range(xy.shape[1]):
-                        kx, ky, kc = float(xy[i, k, 0]), float(xy[i, k, 1]), float(conf[i, k])
-                        if kc >= CONF_M3 and kx > 1 and ky > 1:
-                            keypoints_ruedas.append([round(kx, 1), round(ky, 1), round(kc, 3)])
+                for b, s, p, c in zip(
+                    res.boxes.xyxy.cpu().numpy(),
+                    res.boxes.conf.cpu().numpy(),
+                    xy,
+                    kc,
+                ):
+                    kps_5x3 = np.concatenate([p, c[:, None]], axis=1)
+                    llantas_detectadas.append(
+                        {"conf": float(s), "box": b.tolist(), "kps": kps_5x3.tolist()}
+                    )
 
-        # 2. Respaldo geométrico sobre la mitad inferior del vehículo para detectar centros de rueda
-        if not keypoints_ruedas:
+        # 2. Etapa Zero-shot con YOLOE-seg (prompts 'wheel', 'tire', 'car wheel') -> 5 keypoints geométricos
+        if not llantas_detectadas and self.yoloe_llantas is not None:
+            try:
+                r = self.yoloe_llantas.predict(img_bgr, conf=0.15, imgsz=640, device=DEVICE, verbose=False)[0]
+                if len(r.boxes) > 0 and r.masks is not None:
+                    clases = r.boxes.cls.cpu().numpy().astype(int)
+                    confs = r.boxes.conf.cpu().numpy()
+                    cajas = r.boxes.xyxy.cpu().numpy()
+                    for c, s, b, poly in zip(clases, confs, cajas, r.masks.xy):
+                        nombre = r.names[int(c)]
+                        if nombre in PROMPTS_LLANTA_YOLOE and len(poly) >= 3:
+                            m = np.zeros((h, w), np.uint8)
+                            cv2.fillPoly(m, [poly.astype(np.int32)], 1)
+                            k = kps_de_mascara_llanta(m)
+                            if k is not None:
+                                k[:, 2] = float(s)
+                                llantas_detectadas.append(
+                                    {"conf": float(s), "box": b.tolist(), "kps": k.tolist()}
+                                )
+            except Exception:
+                pass
+
+        # 3. Respaldo geométrico por contornos circulares sobre la parte baja del vehículo -> 5 keypoints por llanta
+        if not llantas_detectadas:
             vx1, vy1, vx2, vy2 = caja_vehiculo if caja_vehiculo else [0, int(h * 0.2), w, h]
-            mitad_y = vy1 + int((vy2 - vy1) * 0.45)
-            roi = img_bgr[max(0, mitad_y):min(h, vy2), max(0, vx1):min(w, vx2)]
+            mitad_y = vy1 + int((vy2 - vy1) * 0.42)
+            roi = img_bgr[max(0, mitad_y) : min(h, vy2), max(0, vx1) : min(w, vx2)]
             if roi.size > 0:
-                gris = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-                gris = cv2.GaussianBlur(gris, (7, 7), 1.5)
+                gris = cv2.GaussianBlur(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY), (7, 7), 1.5)
                 rh, rw = gris.shape[:2]
                 min_r = max(10, int(min(rh, rw) * 0.08))
-                max_r = max(min_r + 10, int(min(rh, rw) * 0.38))
-                min_dist = max(25, int(rw * 0.16))
-
+                max_r = max(min_r + 10, int(min(rh, rw) * 0.40))
                 circulos = cv2.HoughCircles(
                     gris,
                     cv2.HOUGH_GRADIENT,
                     dp=1.2,
-                    minDist=min_dist,
+                    minDist=max(25, int(rw * 0.16)),
                     param1=110,
                     param2=28,
                     minRadius=min_r,
@@ -421,43 +596,64 @@ class MotorInferenciaPeaje:
                     for c in np.round(circulos[0, :]).astype(int)[:6]:
                         cx_abs = float(vx1 + c[0])
                         cy_abs = float(mitad_y + c[1])
-                        keypoints_ruedas.append([round(cx_abs, 1), round(cy_abs, 1), 0.82])
+                        r_abs = float(c[2])
+                        kps_5 = kps_de_circulo_llanta(cx_abs, cy_abs, r_abs, 0.85)
+                        llantas_detectadas.append(
+                            {
+                                "conf": 0.85,
+                                "box": [cx_abs - r_abs, cy_abs - r_abs, cx_abs + r_abs, cy_abs + r_abs],
+                                "kps": kps_5.tolist(),
+                            }
+                        )
 
-        # Agrupar keypoints horizontalmente para estimar el número de ejes visibles desde un lado
-        dist_min_eje = max(28.0, (caja_vehiculo[2] - caja_vehiculo[0]) * 0.14) if caja_vehiculo else 40.0
-        keypoints_ruedas.sort(key=lambda p: p[0])
+        # Filtrar llantas que pertenecen al vehículo principal (centro en la mitad inferior del vehículo)
+        if caja_vehiculo and llantas_detectadas:
+            vx1, vy1, vx2, vy2 = caja_vehiculo
+            vw, vh = vx2 - vx1, vy2 - vy1
+            asociadas = []
+            for l in llantas_detectadas:
+                cx, cy = l["kps"][0][0], l["kps"][0][1]
+                if (vx1 - 0.08 * vw) <= cx <= (vx2 + 0.08 * vw) and (vy1 + 0.30 * vh) <= cy <= (vy2 + 0.12 * vh):
+                    asociadas.append(l)
+            if asociadas:
+                llantas_detectadas = asociadas
 
-        ejes_filtrados: List[List[float]] = []
-        for kp in keypoints_ruedas:
-            if not ejes_filtrados or abs(kp[0] - ejes_filtrados[-1][0]) >= dist_min_eje:
-                ejes_filtrados.append(kp)
+        ejes, vista, llantas_cercanas = analizar_ejes_vehiculo(
+            caja_vehiculo, llantas_detectadas, categoria
+        )
 
-        if len(ejes_filtrados) >= 2:
-            ejes = min(len(ejes_filtrados), 6)
-        else:
-            # Asignación consistente por categoría cuando la toma es estrictamente frontal
-            ejes_por_defecto = {"moto": 2, "auto": 2, "minibus": 2, "bus": 3, "camion": 3}
-            ejes = ejes_por_defecto.get(categoria, 2)
-            if caja_vehiculo and not ejes_filtrados:
-                vx1, vy1, vx2, vy2 = caja_vehiculo
-                y_rueda = round(vy1 + (vy2 - vy1) * 0.84, 1)
-                pasos_x = np.linspace(vx1 + (vx2 - vx1) * 0.22, vx2 - (vx2 - vx1) * 0.22, ejes)
-                ejes_filtrados = [[round(float(px), 1), float(y_rueda), 0.75] for px in pasos_x]
+        # Si la vista fue estrictamente frontal sin llantas laterales visibles, sintetizar centros de referencia
+        if not llantas_cercanas and caja_vehiculo:
+            vx1, vy1, vx2, vy2 = caja_vehiculo
+            y_r = round(vy1 + (vy2 - vy1) * 0.84, 1)
+            r_est = max(18.0, (vy2 - vy1) * 0.12)
+            for px in np.linspace(vx1 + (vx2 - vx1) * 0.22, vx2 - (vx2 - vx1) * 0.22, ejes):
+                k5 = kps_de_circulo_llanta(float(px), float(y_r), float(r_est), 0.75)
+                llantas_cercanas.append(
+                    {
+                        "conf": 0.75,
+                        "box": [px - r_est, y_r - r_est, px + r_est, y_r + r_est],
+                        "kps": k5.tolist(),
+                    }
+                )
 
-        # Vehículos ligeros tienen 2 ejes
-        if categoria in ("moto", "auto", "minibus"):
-            ejes = 2
-            ejes_filtrados = ejes_filtrados[:2]
+        centros_ejes = [
+            [round(float(l["kps"][0][0]), 1), round(float(l["kps"][0][1]), 1), round(float(l["conf"]), 3)]
+            for l in llantas_cercanas
+        ]
 
         ms = round((time.perf_counter() - t0) * 1000, 1)
         return {
             "ejes": int(ejes),
-            "keypoints_ruedas": ejes_filtrados,
+            "vista": vista,
+            "llantas_visibles": len(llantas_cercanas),
+            "llantas_5kps": llantas_cercanas,
+            "keypoints_ruedas": centros_ejes,
             "latencia_m3_ms": ms,
         }
 
     # --------------------------------------------------------------------------
-    # Dibujo de Evidencia (Máscara M2 + Placa M1 + Keypoints de Ruedas M3)
+    # Dibujo de Evidencia (Máscara M2 + Placa M1 + 5 Keypoints por Llanta M3)
     # --------------------------------------------------------------------------
     @staticmethod
     def dibujar_evidencia(
@@ -470,7 +666,9 @@ class MotorInferenciaPeaje:
         capa = img_bgr.copy()
         grosor = max(2, int(round(max(vis.shape[:2]) / 420)))
 
-        # 1. Dibujar máscaras y cajas de M2 (Segmentación de vehículos)
+        # 1. Dibujar máscaras y cajas de M2 (Segmentación de vehículos) con conteo de llantas y ejes
+        n_llantas = res_m3.get("llantas_visibles", len(res_m3.get("keypoints_ruedas", [])))
+        n_ejes = res_m3.get("ejes", 2)
         for d in res_m2.get("detecciones", [])[:2]:
             color = COLORES_BGR.get(d["categoria"], (219, 152, 52))
             mask = d.get("mask")
@@ -480,19 +678,29 @@ class MotorInferenciaPeaje:
                 cv2.drawContours(vis, cnts, -1, color, grosor)
             x1, y1, x2, y2 = d["caja"]
             cv2.rectangle(vis, (x1, y1), (x2, y2), color, grosor)
-            etiqueta = f"{d['categoria'].upper()} ({d['confianza']:.2f})"
-            cv2.rectangle(vis, (x1, max(0, y1 - 26)), (x1 + 190, y1), color, -1)
-            cv2.putText(vis, etiqueta, (x1 + 5, max(18, y1 - 7)), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 2)
+            etiqueta = f"{d['categoria'].capitalize()} | {n_llantas} llantas | ejes: {n_ejes}"
+            (tw, th), _ = cv2.getTextSize(etiqueta, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+            cv2.rectangle(vis, (x1, max(0, y1 - th - 10)), (x1 + tw + 10, y1), color, -1)
+            cv2.putText(vis, etiqueta, (x1 + 5, max(16, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
 
         vis = cv2.addWeighted(capa, 0.32, vis, 0.68, 0)
 
-        # 2. Dibujar keypoints de ruedas M3 (Número de ejes)
-        kps = res_m3.get("keypoints_ruedas", [])
-        for idx, (kx, ky, kc) in enumerate(kps, start=1):
-            pt = (int(kx), int(ky))
-            cv2.circle(vis, pt, 9, (0, 255, 255), -1)
-            cv2.circle(vis, pt, 12, (0, 0, 0), 2)
-            cv2.putText(vis, f"E{idx}", (pt[0] - 10, pt[1] - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 255, 255), 2)
+        # 2. Dibujar los 5 keypoints y esqueleto en cruz de cada llanta (M3 - estilo keypoints_llantas_yolo_detectron2_v3)
+        for l in res_m3.get("llantas_5kps", []):
+            k = l["kps"]
+            lx1, ly1, lx2, ly2 = map(int, l["box"])
+            cv2.rectangle(vis, (lx1, ly1), (lx2, ly2), (0, 255, 255), max(1, grosor // 2))
+            for a, b in ESQUELETO_LLANTA:
+                if a < len(k) and b < len(k) and k[a][2] > UMBRAL_KP and k[b][2] > UMBRAL_KP:
+                    p1 = (int(k[a][0]), int(k[a][1]))
+                    p2 = (int(k[b][0]), int(k[b][1]))
+                    cv2.line(vis, p1, p2, (0, 255, 255), max(1, grosor // 2), cv2.LINE_AA)
+            for idx_kp, pt_kp in enumerate(k[:5]):
+                if pt_kp[2] > UMBRAL_KP:
+                    pt = (int(pt_kp[0]), int(pt_kp[1]))
+                    col_kp = KPT_COLORES_BGR[idx_kp]
+                    cv2.circle(vis, pt, grosor + 2, col_kp, -1, cv2.LINE_AA)
+                    cv2.circle(vis, pt, grosor + 2, (0, 0, 0), 1, cv2.LINE_AA)
 
         # 3. Dibujar caja y lectura de placa M1
         caja_p = res_m1.get("caja_placa")
@@ -541,11 +749,12 @@ class MotorInferenciaPeaje:
         )
 
         return {
-            # Campos obligatorios Sección 4.7: placa, confianza, categoría, ejes y latencia
+            # Campos obligatorios Sección 4.7 (+ campo pasajeros Sección 10):
             "placa": placa_final,
             "confianza": round(float(confianza_final), 3),
             "categoria": res_m2["categoria"],
             "ejes": res_m3["ejes"],
+            "pasajeros": res_m2.get("pasajeros", 1),
             "latencia": latencia_total_ms,
             # Campos extendidos para la BD (tabla pasos) y panel en tiempo real
             "placa_leida": res_m1["placa_leida"],
