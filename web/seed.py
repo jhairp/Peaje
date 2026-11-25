@@ -4,12 +4,17 @@ Poblado Inicial de la Base de Datos (Sección 4.4 y 4.6):
   - Crea un usuario Operador de ejemplo
   - Crea 3 casetas de peaje
   - Crea el tarifario completo por categoría (moto, auto, minibus, bus, camion) y número de ejes
-  - Registra 24 vehículos de prueba (>= 20 obligatorios) cubriendo:
-      * Vehículos con saldo y pasos registrados ("Registrada y con paso")
-      * Vehículos registrados sin pasos ("Registrada sin paso")
-      * Vehículos registrados sin saldo (para generar alerta 'sin_saldo')
-  - Registra pasos iniciales incluyendo una placa captada por cámara pero no registrada
-    ("Identificada no registrada" + alerta 'placa_no_registrada')
+  - Registra 24 vehículos de prueba (>= 20 obligatorios) incluyendo la mitad de las placas reales
+    del video de prueba (WhatsApp Video 2026-11-25):
+      * REGISTRADAS del video (4 placas):
+          - 2673TYH (00:03 Toyota Corolla Wagon Blanco Taxi -> Con saldo Bs. 120 y paso previo -> "Registrada y con paso")
+          - 2760ZTA (00:12 Toyota Probox Blanco Taxi -> Con saldo Bs. 85 -> "Registrada sin paso" / Aprobado)
+          - 5324DZG (00:17 Toyota Rush SUV Plateada -> Sin saldo Bs. 0 -> Alerta 'sin_saldo')
+          - 6363KGD (00:33 Suzuki Jimny Oscuro -> Con saldo Bs. 150 -> "Registrada sin paso" / Aprobado)
+      * NO REGISTRADAS del video (3 placas, dejadas fuera del padrón para disparar alerta 'placa_no_registrada'):
+          - 6672LXL (00:08 Suzuki Jimny Azul Celeste -> "Identificada no registrada")
+          - 4011XKH (00:30 Toyota Probox Azul Oscuro -> Al pasar en el video genera Alerta en vivo)
+          - 2030ZUD (00:37 Toyota Corolla Wagon Plateado -> Al pasar en el video genera Alerta en vivo)
 """
 import datetime
 import os
@@ -43,7 +48,6 @@ def ejecutar_seed(db: Session):
         },
     ]
 
-    # Agregar correos extra de ADMIN_EMAILS si están en .env
     extra_admins = os.environ.get("ADMIN_EMAILS", "")
     for correo in extra_admins.split(","):
         c = correo.strip().lower()
@@ -73,7 +77,7 @@ def ejecutar_seed(db: Session):
         casetas = [
             Caseta(nombre="Caseta 1 - Autopista Carril Norte", ubicacion="Km 12 Autopista La Paz - El Alto"),
             Caseta(nombre="Caseta 2 - Autopista Carril Sur", ubicacion="Km 12 Autopista El Alto - La Paz"),
-            Caseta(nombre="Caseta 3 - Transporte Pesado", ubicacion=" Vía Viacha - Control Carga Pesada"),
+            Caseta(nombre="Caseta 3 - Transporte Pesado", ubicacion="Vía Viacha - Control Carga Pesada"),
         ]
         db.add_all(casetas)
         db.commit()
@@ -101,26 +105,59 @@ def ejecutar_seed(db: Session):
     # --------------------------------------------------------------------------
     # 4. VEHÍCULOS DE PRUEBA (24 VEHÍCULOS >= 20 MÍNIMOS OBLIGATORIOS)
     # --------------------------------------------------------------------------
+    vehiculos_video_registrados = [
+        {
+            "placa": "2673TYH",
+            "propietario": "Juan Carlos Quispe (Toyota Corolla Taxi Blanco)",
+            "categoria": "auto",
+            "ejes": 2,
+            "saldo": 120.0,
+            "activo": True,
+        },
+        {
+            "placa": "2760ZTA",
+            "propietario": "Roberto Mamani Condori (Toyota Probox Blanco)",
+            "categoria": "auto",
+            "ejes": 2,
+            "saldo": 85.0,
+            "activo": True,
+        },
+        {
+            "placa": "5324DZG",
+            "propietario": "María Elena Vargas (Toyota Rush SUV Plateada)",
+            "categoria": "auto",
+            "ejes": 2,
+            "saldo": 0.0,  # Sin saldo -> Alerta 'sin_saldo'
+            "activo": True,
+        },
+        {
+            "placa": "6363KGD",
+            "propietario": "Fernando Siles Torrez (Suzuki Jimny Oscuro)",
+            "categoria": "auto",
+            "ejes": 2,
+            "saldo": 150.0,
+            "activo": True,
+        },
+    ]
+
     if db.query(Vehiculo).count() == 0:
         vehiculos_prueba = [
-            # Autos particulares
+            Vehiculo(**v) for v in vehiculos_video_registrados
+        ] + [
+            # Otros autos particulares
             Vehiculo(placa="1852PHD", propietario="Carlos Mendoza Quispe", categoria="auto", ejes=2, saldo=120.0, activo=True),
             Vehiculo(placa="2419TKR", propietario="María Fernanda Rojas", categoria="auto", ejes=2, saldo=85.0, activo=True),
             Vehiculo(placa="3045ABC", propietario="Jorge Luis Mamani", categoria="auto", ejes=2, saldo=64.0, activo=True),
-            Vehiculo(placa="4198LKM", propietario="Ana Gabriela Vargas", categoria="auto", ejes=2, saldo=0.0, activo=True),   # Sin saldo -> Alerta
-            Vehiculo(placa="5280BNC", propietario="Roberto Siles Torrez", categoria="auto", ejes=2, saldo=150.0, activo=True),
-            Vehiculo(placa="1049XYZ", propietario="Lucía Condori Flores", categoria="auto", ejes=2, saldo=95.0, activo=True),
-            Vehiculo(placa="2951DFG", propietario="Pedro Pablo Gutiérrez", categoria="auto", ejes=2, saldo=42.0, activo=True),
             # Minibuses (servicio público / trufis)
             Vehiculo(placa="3810RTY", propietario="Sindicato Eduardo Avaroa - Unidad 14", categoria="minibus", ejes=2, saldo=210.0, activo=True),
             Vehiculo(placa="4720UIO", propietario="Sindicato Litoral - Unidad 08", categoria="minibus", ejes=2, saldo=175.0, activo=True),
-            Vehiculo(placa="5612PAS", propietario="Cooperativa 16 de Julio", categoria="minibus", ejes=2, saldo=5.0, activo=True),  # Saldo insuficiente (<10 Bs)
+            Vehiculo(placa="5612PAS", propietario="Cooperativa 16 de Julio", categoria="minibus", ejes=2, saldo=5.0, activo=True),
             Vehiculo(placa="2184MNB", propietario="Ramiro Choquehuanca", categoria="minibus", ejes=2, saldo=130.0, activo=True),
             Vehiculo(placa="3390VFR", propietario="Asociación Transporte del Sur", categoria="minibus", ejes=2, saldo=90.0, activo=True),
             # Camiones (transporte pesado de 2, 3, 4 y 5 ejes)
             Vehiculo(placa="4029CDX", propietario="Transportes Andinos S.R.L.", categoria="camion", ejes=3, saldo=450.0, activo=True),
             Vehiculo(placa="5108TRK", propietario="Logística Altiplano S.A.", categoria="camion", ejes=4, saldo=620.0, activo=True),
-            Vehiculo(placa="3674HJK", propietario="Importadora Copacabana", categoria="camion", ejes=3, saldo=0.0, activo=True),    # Sin saldo -> Alerta
+            Vehiculo(placa="3674HJK", propietario="Importadora Copacabana", categoria="camion", ejes=3, saldo=0.0, activo=True),
             Vehiculo(placa="4892QWE", propietario="Transporte Pesado Illimani", categoria="camion", ejes=5, saldo=800.0, activo=True),
             Vehiculo(placa="2765ZXC", propietario="Distribuidora Oriental", categoria="camion", ejes=2, saldo=180.0, activo=True),
             Vehiculo(placa="5931PLM", propietario="Constructora Cumbre S.R.L.", categoria="camion", ejes=4, saldo=310.0, activo=True),
@@ -135,87 +172,87 @@ def ejecutar_seed(db: Session):
         ]
         db.add_all(vehiculos_prueba)
         db.commit()
+    else:
+        # Asegurar que las 4 placas registradas del video existan en BD y las 3 no registradas NO estén en el padrón
+        for v_data in vehiculos_video_registrados:
+            existente = db.query(Vehiculo).filter(Vehiculo.placa == v_data["placa"]).first()
+            if not existente:
+                db.add(Vehiculo(**v_data))
+        for placa_no_reg in ("6672LXL", "4011XKH", "2030ZUD"):
+            v_borrar = db.query(Vehiculo).filter(Vehiculo.placa == placa_no_reg).first()
+            if v_borrar:
+                db.delete(v_borrar)
+        db.commit()
 
     # --------------------------------------------------------------------------
-    # 5. PASOS Y ALERTAS INICIALES PARA DEMOSTRAR LOS 4 ESTADOS DEL AGENTE
+    # 5. PASOS Y ALERTAS INICIALES CON PLACAS DEL VIDEO PARA LOS 4 ESTADOS
     # --------------------------------------------------------------------------
     if db.query(Paso).count() == 0:
         admin_user = db.query(Usuario).first()
         uid = admin_user.id if admin_user else 1
         ahora = datetime.datetime.now(datetime.timezone.utc)
 
-        # Paso 1: Vehículo registrado con paso exitoso (1852PHD -> "Registrada y con paso")
+        # Paso 1: 2673TYH (Toyota Corolla Taxi del video -> "Registrada y con paso")
         p1 = Paso(
-            placa_leida="1852-PHD",
-            placa_normalizada="1852PHD",
+            placa_leida="2673-TYH",
+            placa_normalizada="2673TYH",
             confianza_ocr=0.96,
             categoria_detectada="auto",
             ejes_detectados=2,
+            pasajeros=2,
             monto=7.0,
             caseta_id=1,
             usuario_id=uid,
-            imagen_url="/api/v1/evidencias/demo_1852PHD.svg",
+            imagen_url="/api/v1/evidencias/demo_2673TYH.svg",
             estado="aprobado",
-            created_at=ahora - datetime.timedelta(minutes=35),
+            created_at=ahora - datetime.timedelta(minutes=30),
         )
-        # Paso 2: Camión pesado 3 ejes registrado con paso exitoso (4029CDX -> "Registrada y con paso")
+        # Paso 2: 5324DZG (Toyota Rush SUV Plateada del video -> Registrada pero SIN SALDO -> Alerta 'sin_saldo')
         p2 = Paso(
-            placa_leida="4029 CDX",
-            placa_normalizada="4029CDX",
-            confianza_ocr=0.94,
-            categoria_detectada="camion",
-            ejes_detectados=3,
-            monto=22.0,
-            caseta_id=3,
-            usuario_id=uid,
-            imagen_url="/api/v1/evidencias/demo_4029CDX.svg",
-            estado="aprobado",
-            created_at=ahora - datetime.timedelta(minutes=22),
-        )
-        # Paso 3: Vehículo registrado pero SIN SALDO (4198LKM -> genera Alerta 'sin_saldo')
-        p3 = Paso(
-            placa_leida="4198-LKM",
-            placa_normalizada="4198LKM",
-            confianza_ocr=0.92,
+            placa_leida="5324-DZG",
+            placa_normalizada="5324DZG",
+            confianza_ocr=0.93,
             categoria_detectada="auto",
             ejes_detectados=2,
+            pasajeros=1,
             monto=7.0,
             caseta_id=1,
             usuario_id=uid,
-            imagen_url="/api/v1/evidencias/demo_4198LKM.svg",
+            imagen_url="/api/v1/evidencias/demo_5324DZG.svg",
             estado="sin_saldo",
-            created_at=ahora - datetime.timedelta(minutes=14),
+            created_at=ahora - datetime.timedelta(minutes=16),
         )
-        # Paso 4: Placa detectada por cámara pero NO REGISTRADA en BD (9981EVA -> "Identificada no registrada" + Alerta)
-        p4 = Paso(
-            placa_leida="9981-EVA",
-            placa_normalizada="9981EVA",
-            confianza_ocr=0.91,
-            categoria_detectada="camion",
-            ejes_detectados=3,
-            monto=22.0,
+        # Paso 3: 6672LXL (Suzuki Jimny Azul Celeste del video -> Detectada pero NO REGISTRADA -> "Identificada no registrada")
+        p3 = Paso(
+            placa_leida="6672-LXL",
+            placa_normalizada="6672LXL",
+            confianza_ocr=0.94,
+            categoria_detectada="auto",
+            ejes_detectados=2,
+            pasajeros=2,
+            monto=7.0,
             caseta_id=2,
             usuario_id=uid,
-            imagen_url="/api/v1/evidencias/demo_9981EVA.svg",
+            imagen_url="/api/v1/evidencias/demo_6672LXL.svg",
             estado="no_registrada",
-            created_at=ahora - datetime.timedelta(minutes=6),
+            created_at=ahora - datetime.timedelta(minutes=8),
         )
-        db.add_all([p1, p2, p3, p4])
+        db.add_all([p1, p2, p3])
         db.commit()
+        db.refresh(p2)
         db.refresh(p3)
-        db.refresh(p4)
 
         alerta_saldo = Alerta(
-            paso_id=p3.id,
+            paso_id=p2.id,
             tipo="sin_saldo",
             atendida=False,
-            created_at=p3.created_at,
+            created_at=p2.created_at,
         )
         alerta_evasion = Alerta(
-            paso_id=p4.id,
+            paso_id=p3.id,
             tipo="placa_no_registrada",
             atendida=False,
-            created_at=p4.created_at,
+            created_at=p3.created_at,
         )
         db.add_all([alerta_saldo, alerta_evasion])
         db.commit()

@@ -231,17 +231,17 @@
                 <i class="fa-solid fa-upload mr-1"></i> Subir Frame Real (M1+M2+M3)
                 <input type="file" id="frame-upload-input" accept="image/*" class="hidden" onchange="enviarFrameArchivo(this)" />
               </label>
-              <button onclick="simularPasoCaseta('1852PHD', 'auto', 2)" class="px-2.5 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-700 text-xs text-emerald-200 transition">
-                + Paso Auto (1852PHD)
+              <button onclick="simularPasoCaseta('2673TYH', 'auto', 2)" class="px-2.5 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-700 text-xs text-emerald-200 transition">
+                + Paso Auto (2673TYH)
               </button>
-              <button onclick="simularPasoCaseta('5108TRK', 'camion', 4)" class="px-2.5 py-1.5 rounded-lg bg-sky-900/60 hover:bg-sky-800 border border-sky-700 text-xs text-sky-200 transition">
-                + Camión 4 Ejes (5108TRK)
+              <button onclick="simularPasoCaseta('6363KGD', 'auto', 2)" class="px-2.5 py-1.5 rounded-lg bg-sky-900/60 hover:bg-sky-800 border border-sky-700 text-xs text-sky-200 transition">
+                + Paso Jimny (6363KGD)
               </button>
-              <button onclick="simularPasoCaseta('4198LKM', 'auto', 2)" class="px-2.5 py-1.5 rounded-lg bg-amber-900/60 hover:bg-amber-800 border border-amber-700 text-xs text-amber-200 transition">
-                + Alerta Sin Saldo (4198LKM)
+              <button onclick="simularPasoCaseta('5324DZG', 'auto', 2)" class="px-2.5 py-1.5 rounded-lg bg-amber-900/60 hover:bg-amber-800 border border-amber-700 text-xs text-amber-200 transition">
+                + Alerta Sin Saldo (5324DZG)
               </button>
-              <button onclick="simularPasoCaseta('8842EVA', 'minibus', 2)" class="px-2.5 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 border border-red-700 text-xs text-red-200 transition">
-                + Alerta No Registrada (8842EVA)
+              <button onclick="simularPasoCaseta('6672LXL', 'auto', 2)" class="px-2.5 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 border border-red-700 text-xs text-red-200 transition">
+                + Alerta No Registrada (6672LXL)
               </button>
             </div>
           </div>
@@ -449,10 +449,10 @@
             <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs leading-relaxed text-slate-200">
               👋 Hola, soy el **Agente Conversacional del Peaje** impulsado por **Qwen**. Escribe una placa o sube la foto de una placa para informarte su estado oficial entre los **4 estados del sistema**:
               <ul class="list-disc list-inside mt-2 text-slate-400 space-y-1">
-                <li><strong class="text-emerald-400">Registrada y con paso</strong> (ej. <code>1852-PHD</code>, <code>4029CDX</code>)</li>
-                <li><strong class="text-sky-400">Registrada sin paso</strong> (ej. <code>5280BNC</code>, <code>3810RTY</code>)</li>
-                <li><strong class="text-amber-400">Identificada no registrada</strong> (ej. <code>9981EVA</code>)</li>
-                <li><strong class="text-red-400">No existe</strong> + sugerencia OCR (ej. <code>1B52-PH0</code> o <code>7777NOE</code>)</li>
+                <li><strong class="text-emerald-400">Registrada y con paso</strong> (ej. <code>2673-TYH</code>, <code>5324DZG</code>)</li>
+                <li><strong class="text-sky-400">Registrada sin paso</strong> (ej. <code>6363KGD</code>, <code>2760ZTA</code>)</li>
+                <li><strong class="text-amber-400">Identificada no registrada</strong> (ej. <code>6672LXL</code>)</li>
+                <li><strong class="text-red-400">No existe</strong> + sugerencia OCR (ej. <code>2673-1YH</code> o <code>4011XKH</code>)</li>
               </ul>
             </div>
           </div>
@@ -463,7 +463,7 @@
               <i class="fa-solid fa-camera mr-1 text-purple-400"></i> Imagen
               <input type="file" id="chat-image-input" accept="image/*" class="hidden" onchange="enviarImagenAgente(this)" />
             </label>
-            <input id="chat-text-input" type="text" placeholder="Escribe una placa o consulta (ej. ¿Cuál es el estado de 1852-PHD?)..."
+            <input id="chat-text-input" type="text" placeholder="Escribe una placa del video (ej. ¿Cuál es el estado de 2673-TYH?)..."
               class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500" />
             <button type="submit" class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white transition">
               <i class="fa-solid fa-paper-plane mr-1"></i> Consultar
@@ -474,40 +474,40 @@
         <!-- Botones de demostración de los 4 estados y corrección OCR (Sección 8) -->
         <div class="glass rounded-2xl p-6 space-y-4">
           <h3 class="text-sm font-bold text-white border-b border-slate-800 pb-2">
-            <i class="fa-solid fa-vial-circle-check text-purple-400 mr-1.5"></i> Pruebas Rápidas de los 4 Estados (Video Demo)
+            <i class="fa-solid fa-vial-circle-check text-purple-400 mr-1.5"></i> Pruebas Rápidas con Placas del Video
           </h3>
           <p class="text-xs text-slate-400 leading-relaxed">
-            Haz clic en cualquiera de estos casos para demostrar en vivo cómo el agente responde cada estado exigido en la rúbrica:
+            Haz clic en cualquiera de estas placas reales del video para demostrar los 4 estados exigidos en la rúbrica:
           </p>
           <div class="space-y-2.5">
-            <button onclick="probarConsultaAgente('¿Cuál es el estado de la placa 1852-phd?')"
+            <button onclick="probarConsultaAgente('¿Cuál es el estado de la placa 2673-tyh?')"
               class="w-full p-3 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-700/60 text-left transition">
               <p class="text-xs font-bold text-emerald-300">1. Estado: Registrada y con paso</p>
-              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>1852-phd</code> (normaliza y muestra fecha, caseta, categoría y monto)</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Placa video (00:03): <code>2673-tyh</code> (Toyota Corolla Taxi Blanco)</p>
             </button>
 
-            <button onclick="probarConsultaAgente('Consultar placa 5280-BNC')"
+            <button onclick="probarConsultaAgente('Consultar placa 6363-KGD')"
               class="w-full p-3 rounded-xl bg-sky-950/40 hover:bg-sky-900/50 border border-sky-700/60 text-left transition">
               <p class="text-xs font-bold text-sky-300">2. Estado: Registrada sin paso</p>
-              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>5280-BNC</code> (registrada en padrón pero nunca pasó por peaje)</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Placa video (00:33): <code>6363-KGD</code> (Suzuki Jimny Oscuro)</p>
             </button>
 
-            <button onclick="probarConsultaAgente('Revisar placa 9981EVA')"
+            <button onclick="probarConsultaAgente('Revisar placa 6672LXL')"
               class="w-full p-3 rounded-xl bg-amber-950/40 hover:bg-amber-900/50 border border-amber-700/60 text-left transition">
               <p class="text-xs font-bold text-amber-300">3. Estado: Identificada no registrada</p>
-              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>9981EVA</code> (detectada por cámara en caseta pero no registrada)</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Placa video (00:08): <code>6672LXL</code> (Suzuki Jimny Azul Celeste)</p>
             </button>
 
-            <button onclick="probarConsultaAgente('Estado de la placa 7777ZZZ')"
+            <button onclick="probarConsultaAgente('Estado de la placa 4011XKH')"
               class="w-full p-3 rounded-xl bg-red-950/40 hover:bg-red-900/50 border border-red-700/60 text-left transition">
-              <p class="text-xs font-bold text-red-300">4. Estado: No existe</p>
-              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>7777ZZZ</code> (sin registro en padrón ni pasos)</p>
+              <p class="text-xs font-bold text-red-300">4. Estado: No existe (antes de pasar)</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Placa video (00:30): <code>4011XKH</code> (Probox Azul Oscuro no empadronado)</p>
             </button>
 
-            <button onclick="probarConsultaAgente('1B52-PH0')"
+            <button onclick="probarConsultaAgente('2673-1YH')"
               class="w-full p-3 rounded-xl bg-purple-950/40 hover:bg-purple-900/50 border border-purple-700/60 text-left transition">
-              <p class="text-xs font-bold text-purple-300">5. Error probable de OCR (B↔8, 0↔D)</p>
-              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>1B52-PH0</code> → Sugiere: <em>"¿Quisiste decir 1852PHD?"</em></p>
+              <p class="text-xs font-bold text-purple-300">5. Error probable de OCR (1↔T)</p>
+              <p class="text-[11px] text-slate-300 mt-0.5">Consulta: <code>2673-1YH</code> → Sugiere: <em>"¿Quisiste decir 2673TYH?"</em></p>
             </button>
           </div>
         </div>
