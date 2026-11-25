@@ -1,0 +1,177 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sistema Inteligente de Control de Peaje - API REST v1",
+    "description": "API REST documentada con OpenAPI/Swagger para el Laboratorio 3 (IAM-811). Integra Google OAuth 2.0 con lista blanca, conexión al endpoint de inferencia (M1+M2+M3) en RunPod/Colab, actualización en tiempo real (WebSockets + SSE) y Agente Conversacional con Qwen.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://peaje-62tb.onrender.com",
+      "description": "Servidor de Producción en Subdominio HTTPS"
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/google": {
+      "post": {
+        "tags": ["Autenticación"],
+        "summary": "Recibe el token de Google desde la app y devuelve el token de sesión del sistema",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Token JWT de sesión emitido" },
+          "403": { "description": "Acceso denegado: cuenta fuera de la Lista Blanca" }
+        }
+      }
+    },
+    "/api/v1/pasos/frame": {
+      "post": {
+        "tags": ["Pasos y Caseta"],
+        "summary": "Recibe un frame desde la app, llama a la inferencia, registra el paso y lo emite en tiempo real",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary" },
+                  "caseta_id": { "type": "integer", "default": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Paso registrado y emitido en tiempo real (placa, categoría, ejes, tarifa, estado)" }
+        }
+      }
+    },
+    "/api/v1/placas/consultar": {
+      "post": {
+        "tags": ["Consultas de Placas"],
+        "summary": "Consulta una placa por texto y devuelve su estado",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["placa"],
+                "properties": {
+                  "placa": { "type": "string", "example": "1852-PHD" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Estado de la placa (4 estados posibles + sugerencias OCR)" }
+        }
+      }
+    },
+    "/api/v1/placas/consultar-imagen": {
+      "post": {
+        "tags": ["Consultas de Placas"],
+        "summary": "Consulta una placa por imagen (M1 + OCR) y devuelve su estado",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Placa leída por M1+OCR y su estado en el sistema" }
+        }
+      }
+    },
+    "/api/v1/placas/{placa}/historial": {
+      "get": {
+        "tags": ["Consultas de Placas"],
+        "summary": "Historial de pasos de una placa",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "placa",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "example": "1852PHD" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Historial completo de pasos de la placa" }
+        }
+      }
+    },
+    "/api/v1/casetas/{id}/resumen": {
+      "get": {
+        "tags": ["Pasos y Caseta"],
+        "summary": "Conteo y recaudación del día",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Resumen de pasos y recaudación del día en Bs." }
+        }
+      }
+    },
+    "/api/v1/agente/chat": {
+      "post": {
+        "tags": ["Agente Conversacional Qwen"],
+        "summary": "Mensaje al agente conversacional (por texto o imagen)",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "mensaje": { "type": "string", "example": "¿Cuál es el estado de la placa 1852-PHD?" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Respuesta del Agente Conversacional Qwen con uno de los 4 estados" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

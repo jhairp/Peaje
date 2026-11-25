@@ -3,6 +3,7 @@ Módulo de Autenticación Exclusiva con Google OAuth 2.0 y Control de Roles / Li
 """
 import datetime
 import os
+import secrets
 from typing import Dict, Optional
 
 import requests
@@ -20,7 +21,7 @@ from models import Usuario
 load_dotenv()
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "peaje_iam811_clave_jwt_segura_2026_unifranz")
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or secrets.token_urlsafe(32)
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "1440"))
 

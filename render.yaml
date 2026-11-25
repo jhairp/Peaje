@@ -20,7 +20,7 @@ services:
       - key: INFERENCE_URL
         sync: false
       - key: INFERENCE_API_TOKEN
-        value: token_secreto_inferencia_peaje_2026
+        sync: false
       - key: QWEN_API_KEY
         sync: false
       - key: QWEN_BASE_URL

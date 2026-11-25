@@ -76,8 +76,8 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 
 # Configuración dinámica del endpoint de inferencia (Sección 3: cambiar entre RunPod y Colab es solo cambiar INFERENCE_URL)
 CONFIG_SISTEMA = {
-    "inference_url": os.environ.get("INFERENCE_URL", "https://tu-pod-id-8000.proxy.runpod.net").rstrip("/"),
-    "inference_api_token": os.environ.get("INFERENCE_API_TOKEN", "token_secreto_inferencia_peaje_2026"),
+    "inference_url": os.environ.get("INFERENCE_URL", "").rstrip("/"),
+    "inference_api_token": os.environ.get("INFERENCE_API_TOKEN", ""),
     "timeout": float(os.environ.get("INFERENCE_TIMEOUT_SECONDS", "45")),
 }
 

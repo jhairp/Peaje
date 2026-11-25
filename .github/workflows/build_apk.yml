@@ -27,8 +27,6 @@ jobs:
       - name: 4. Preparar estructura Android y compilar APK
         working-directory: movil
         run: |
-          mkdir -p ~/.android
-          cp android/debug.keystore ~/.android/debug.keystore
           cp -r lib /tmp/lib_backup
           cp pubspec.yaml /tmp/pubspec_backup.yaml
           flutter create --platforms=android --org bo.edu.unifranz.iam811 --project-name peaje_ia_movil .

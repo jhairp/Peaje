@@ -13,7 +13,6 @@ client_secret*.json
 google-services.json
 service-account*.json
 *.keystore
-!movil/android/debug.keystore
 *.jks
 
 # Python
