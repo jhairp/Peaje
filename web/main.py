@@ -265,34 +265,127 @@ def obtener_config_oauth():
     }
 
 
-@app.get("/api/v1/auth/google/login", tags=["Autenticación"])
+@app.get("/api/v1/auth/google/login", response_class=HTMLResponse, tags=["Autenticación"])
 def iniciar_flujo_google_oauth(
     request: Request,
     state: str = Query(default="web"),
 ):
     """
-    Redirige al selector oficial de cuentas de Google (accounts.google.com/o/oauth2/v2/auth)
-    con prompt=select_account para que el usuario elija su correo real de Google.
+    Sirve la ventana oficial de Google Identity Services (accounts.google.com/gsi/client)
+    bajo el origen autorizado https://peaje-62tb.onrender.com (evitando por completo
+    cualquier error 400 redirect_uri_mismatch en Web y en Android).
     """
-    if not GOOGLE_CLIENT_ID or GOOGLE_CLIENT_ID.startswith("tu-"):
-        raise HTTPException(
-            status_code=500,
-            detail="Falta configurar GOOGLE_CLIENT_ID en las variables de entorno del servidor.",
-        )
+    es_movil = state.startswith("mobile_")
+    session_id = state.replace("mobile_", "", 1) if es_movil else ""
 
-    base_url = _obtener_base_url_publica(request)
-    redirect_uri = f"{base_url}/api/v1/auth/google/callback"
-    params = {
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "prompt": "select_account",
-        "access_type": "online",
-        "state": state,
-    }
-    url_google = f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
-    return RedirectResponse(url=url_google)
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Acceder con Google · TelePeaje IA</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body {{
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #0b1120; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; padding: 20px;
+    }}
+    .card {{
+      background: #1e293b; border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+      max-width: 400px; width: 100%; padding: 28px 24px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }}
+    .btn-oauth {{
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 13px 18px; margin-top: 14px; border-radius: 12px; border: none;
+      background: #2563eb; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+    }}
+    .status {{ margin-top: 16px; font-size: 13px; line-height: 1.5; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="https://www.svgrepo.com/show/475656/google-color.svg" width="44" height="44" alt="Google" />
+    <h2 style="margin:14px 0 6px;font-size:20px;">Acceder con Google</h2>
+    <p style="margin:0 0 20px;font-size:13px;color:#94a3b8;">
+      Selecciona tu cuenta de Google para continuar a <b>TelePeaje IA</b>
+    </p>
+    <div id="g-btn" style="display:flex;justify-content:center;min-height:44px;"></div>
+    <button class="btn-oauth" onclick="abrirSelectorPopupGoogle()">
+      Elegir cuenta de Google
+    </button>
+    <div id="status-box" class="status" style="color:#cbd5e1;"></div>
+  </div>
+
+  <script>
+    const CLIENT_ID = "{GOOGLE_CLIENT_ID}";
+    const SESSION_ID = "{session_id}";
+    const ES_MOVIL = {"true" if es_movil else "false"};
+    let tokenClient = null;
+
+    async function enviarTokenAlBackend(googleToken) {{
+      const box = document.getElementById("status-box");
+      box.style.color = "#38bdf8";
+      box.innerHTML = "Verificando cuenta en Lista Blanca...";
+      try {{
+        const resp = await fetch("/api/v1/auth/google", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{ token: googleToken, session_id: SESSION_ID || undefined }})
+        }});
+        const data = await resp.json();
+        if (resp.ok) {{
+          box.style.color = "#34d399";
+          box.innerHTML = "<b>✅ Acceso autorizado: " + data.usuario.email_google + "</b><br/>Ya puedes volver a la aplicación TelePeaje IA.";
+          if (!ES_MOVIL) {{
+            localStorage.setItem("peaje_jwt", data.access_token);
+            window.location.href = "/";
+          }} else {{
+            setTimeout(() => {{ window.close(); }}, 1000);
+          }}
+        }} else {{
+          box.style.color = "#f87171";
+          box.innerHTML = "<b>🚫 " + (data.detail || "Acceso denegado por Lista Blanca") + "</b><br/>Regresa a la aplicación TelePeaje IA.";
+        }}
+      }} catch (e) {{
+        box.style.color = "#f87171";
+        box.innerText = "Error de conexión: " + e;
+      }}
+    }}
+
+    function abrirSelectorPopupGoogle() {{
+      if (tokenClient) {{
+        tokenClient.requestAccessToken({{ prompt: "select_account" }});
+      }} else if (window.google && window.google.accounts) {{
+        window.google.accounts.id.prompt();
+      }}
+    }}
+
+    window.onload = function() {{
+      if (window.google && CLIENT_ID) {{
+        window.google.accounts.id.initialize({{
+          client_id: CLIENT_ID,
+          callback: (resp) => enviarTokenAlBackend(resp.credential)
+        }});
+        window.google.accounts.id.renderButton(
+          document.getElementById("g-btn"),
+          {{ theme: "filled_blue", size: "large", width: 300, text: "continue_with" }}
+        );
+        tokenClient = window.google.accounts.oauth2.initTokenClient({{
+          client_id: CLIENT_ID,
+          scope: "openid email profile",
+          prompt: "select_account",
+          callback: (resp) => {{
+            if (resp && resp.access_token) {{
+              enviarTokenAlBackend(resp.access_token);
+            }}
+          }}
+        }});
+      }}
+    }};
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 @app.get("/api/v1/auth/google/callback", tags=["Autenticación"])
@@ -402,21 +495,49 @@ def consultar_estado_oauth_movil(session_id: str):
 
 
 @app.post("/api/v1/auth/google", response_model=AuthResponse, tags=["Autenticación"])
-def login_con_google(req: GoogleAuthRequest, db: Session = Depends(get_db)):
+async def login_con_google(request: Request, db: Session = Depends(get_db)):
     """
     Recibe el token de Google OAuth 2.0 desde la app móvil o la aplicación web,
     verifica la firma con Google, comprueba que el correo esté en la lista blanca (tabla usuarios)
     y devuelve el token JWT de sesión del sistema junto con el rol (administrador u operador).
+    Si incluye session_id (flujo móvil), registra el resultado para la app Android.
     """
-    token_recibido = req.token or req.id_token or req.access_token or ""
-    info_google = verificar_token_google(token_recibido)
-    usuario = validar_usuario_lista_blanca(db, info_google["email"], info_google.get("nombre"))
-    jwt_sistema = crear_token_sesion(usuario)
-    return {
-        "access_token": jwt_sistema,
-        "token_type": "bearer",
-        "usuario": usuario,
-    }
+    body = await request.json()
+    token_recibido = body.get("token") or body.get("id_token") or body.get("access_token") or ""
+    session_id = body.get("session_id")
+
+    try:
+        info_google = verificar_token_google(token_recibido)
+        usuario = validar_usuario_lista_blanca(db, info_google["email"], info_google.get("nombre"))
+        jwt_sistema = crear_token_sesion(usuario)
+
+        if session_id:
+            SESIONES_OAUTH_MOVIL[session_id] = {
+                "completado": True,
+                "ok": True,
+                "access_token": jwt_sistema,
+                "usuario": {
+                    "id": usuario.id,
+                    "email_google": usuario.email_google,
+                    "nombre": usuario.nombre,
+                    "rol": usuario.rol,
+                    "activo": usuario.activo,
+                },
+            }
+
+        return {
+            "access_token": jwt_sistema,
+            "token_type": "bearer",
+            "usuario": usuario,
+        }
+    except HTTPException as exc:
+        if session_id:
+            SESIONES_OAUTH_MOVIL[session_id] = {
+                "completado": True,
+                "ok": False,
+                "error": str(exc.detail),
+            }
+        raise exc
 
 
 @app.get("/api/v1/auth/me", response_model=UsuarioOut, tags=["Autenticación"])

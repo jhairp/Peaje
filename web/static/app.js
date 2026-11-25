@@ -13,6 +13,7 @@ let TOKEN_SESION = localStorage.getItem("peaje_jwt") || "";
 let USUARIO_ACTUAL = null;
 let wsConexion = null;
 let sseConexion = null;
+let googleTokenClient = null;
 
 // ============================================================================
 // 1. AUTENTICACIÓN GOOGLE OAUTH 2.0
@@ -47,6 +48,16 @@ async function inicializarApp() {
         document.getElementById("google-btn-wrapper"),
         { theme: "filled_blue", size: "large", width: 340, text: "signin_with" }
       );
+      googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: cfg.google_client_id,
+        scope: "openid email profile",
+        prompt: "select_account",
+        callback: async (resp) => {
+          if (resp && resp.access_token) {
+            await autenticarConBackend(resp.access_token);
+          }
+        },
+      });
     }
   } catch (e) {
     console.warn("Google Identity script aviso:", e);
@@ -60,6 +71,14 @@ async function inicializarApp() {
     }
   }
   document.getElementById("login-screen").classList.remove("hidden");
+}
+
+function abrirPopupGoogleOAuth() {
+  if (googleTokenClient) {
+    googleTokenClient.requestAccessToken({ prompt: "select_account" });
+  } else {
+    window.location.href = "/api/v1/auth/google/login?state=web";
+  }
 }
 
 async function autenticarConBackend(googleIdToken) {
