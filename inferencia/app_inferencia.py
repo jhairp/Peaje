@@ -807,7 +807,8 @@ def obtener_motor() -> MotorInferenciaPeaje:
 
 
 def _verificar_token(x_api_token: Optional[str]):
-    if API_TOKEN and x_api_token != API_TOKEN:
+    exigir = os.environ.get("REQUIRE_API_TOKEN", "false").lower() == "true"
+    if exigir and API_TOKEN and x_api_token != API_TOKEN:
         raise HTTPException(status_code=401, detail="X-API-Token inválido o faltante")
 
 

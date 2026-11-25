@@ -1089,10 +1089,10 @@ async def verificar_estado_inferencia(
 @app.put("/api/v1/estado/inferencia/config", tags=["Estado de Inferencia"])
 def actualizar_url_inferencia(
     datos: ConfigInferenciaRequest,
-    usuario: Usuario = Depends(exigir_administrador),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
     """
-    Permite al Administrador cambiar INFERENCE_URL en caliente entre RunPod y Google Colab.
+    Permite actualizar el link de Google Colab / RunPod (INFERENCE_URL) en caliente desde la Web o la App Móvil.
     """
     CONFIG_SISTEMA["inference_url"] = datos.inference_url.strip().rstrip("/")
     if datos.inference_api_token is not None and datos.inference_api_token.strip():

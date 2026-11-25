@@ -58,6 +58,43 @@ class ApiService {
     return {'completado': false};
   }
 
+  /// GET /api/v1/estado/inferencia
+  static Future<Map<String, dynamic>> obtenerEstadoInferencia() async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/api/v1/estado/inferencia');
+    final resp = await http.get(uri, headers: _headers());
+    if (resp.statusCode == 200) {
+      return jsonDecode(utf8.decode(resp.bodyBytes));
+    }
+    return {'online': false, 'inference_url': ''};
+  }
+
+  /// PUT /api/v1/estado/inferencia/config
+  /// Actualiza el link de Google Colab / RunPod (INFERENCE_URL) desde la barra superior de la app
+  static Future<Map<String, dynamic>> actualizarUrlColab({
+    required String inferenceUrl,
+    String? apiToken,
+  }) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/api/v1/estado/inferencia/config');
+    final resp = await http.put(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'inference_url': inferenceUrl.trim(),
+        'inference_api_token': (apiToken != null && apiToken.trim().isNotEmpty)
+            ? apiToken.trim()
+            : null,
+      }),
+    );
+    final data = jsonDecode(utf8.decode(resp.bodyBytes));
+    if (resp.statusCode == 200) {
+      return {'ok': true, 'datos': data};
+    }
+    return {
+      'ok': false,
+      'error': data['detail'] ?? 'No se pudo actualizar el link de Colab',
+    };
+  }
+
   /// POST /api/v1/pasos/frame (Modo Caseta: envía frame JPEG capturado a 2-5 fps)
   static Future<Map<String, dynamic>> enviarFrameCaseta({
     required Uint8List bytesJpeg,
