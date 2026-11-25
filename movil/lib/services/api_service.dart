@@ -42,31 +42,20 @@ class ApiService {
     }
   }
 
-  /// POST /api/v1/auth/google-oauth-verify
-  /// Autentica la cuenta de Google seleccionada contra la Lista Blanca en el servidor en la nube.
-  static Future<Map<String, dynamic>> loginConCuentaGoogle({
-    required String email,
-    required String nombre,
-  }) async {
-    final uri = Uri.parse('${AppConfig.baseUrl}/api/v1/auth/google-oauth-verify');
-    final resp = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'nombre': nombre}),
-    );
-
-    final body = jsonDecode(utf8.decode(resp.bodyBytes));
+  /// GET /api/v1/auth/google/mobile-poll/{sessionId}
+  /// Consulta el resultado del inicio de sesión real en accounts.google.com
+  static Future<Map<String, dynamic>> consultarEstadoOAuthMovil(String sessionId) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/api/v1/auth/google/mobile-poll/$sessionId');
+    final resp = await http.get(uri);
     if (resp.statusCode == 200) {
-      tokenSesion = body['access_token'];
-      usuarioActual = body['usuario'];
-      return {'ok': true, 'usuario': usuarioActual};
-    } else {
-      return {
-        'ok': false,
-        'status': resp.statusCode,
-        'error': body['detail'] ?? 'Acceso denegado por lista blanca',
-      };
+      final body = jsonDecode(utf8.decode(resp.bodyBytes));
+      if (body['completado'] == true && body['ok'] == true) {
+        tokenSesion = body['access_token'];
+        usuarioActual = body['usuario'];
+      }
+      return body;
     }
+    return {'completado': false};
   }
 
   /// POST /api/v1/pasos/frame (Modo Caseta: envía frame JPEG capturado a 2-5 fps)

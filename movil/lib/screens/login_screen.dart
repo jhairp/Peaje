@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../config.dart';
 import '../services/api_service.dart';
 import 'home_screen.dart';
 
@@ -10,214 +15,120 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+  Timer? _timerPoll;
   bool _cargando = false;
   String? _mensajeError;
 
-  Future<void> _autenticarCuentaSeleccionada(String email, String nombre) async {
+  @override
+  void dispose() {
+    _timerPoll?.cancel();
+    super.dispose();
+  }
+
+  String _generarSessionId() {
+    final rnd = Random.secure();
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    return List.generate(24, (_) => chars[rnd.nextInt(chars.length)]).join();
+  }
+
+  /// Abre el flujo oficial de Google OAuth 2.0 (accounts.google.com)
+  /// para que el usuario elija su propia cuenta de Google sin listas predefinidas.
+  Future<void> _iniciarConGoogle() async {
     setState(() {
       _cargando = true;
       _mensajeError = null;
     });
 
+    // 1. Intentar primero con el selector nativo de Google Play Services
     try {
-      final res = await ApiService.loginConCuentaGoogle(
-        email: email.trim().toLowerCase(),
-        nombre: nombre.trim(),
-      );
-      if (!mounted) return;
-
-      if (res['ok'] == true) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+      await _googleSignIn.signOut();
+      final cuenta = await _googleSignIn.signIn();
+      if (cuenta != null) {
+        final auth = await cuenta.authentication;
+        final token = auth.idToken ?? auth.accessToken ?? '';
+        if (token.isNotEmpty) {
+          final res = await ApiService.loginConGoogleToken(token);
+          if (!mounted) return;
+          setState(() => _cargando = false);
+          if (res['ok'] == true) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
+            );
+          } else {
+            setState(() => _mensajeError = res['error']?.toString());
+          }
+          return;
+        }
       } else {
-        setState(() {
-          _mensajeError = res['error']?.toString();
-        });
+        setState(() => _cargando = false);
+        return;
       }
-    } catch (e) {
+    } catch (_) {
+      // Si Google Play Services devuelve ApiException 10, pasamos transparentemente
+      // al flujo OAuth 2.0 oficial en accounts.google.com
+    }
+
+    // 2. Flujo OAuth 2.0 real en accounts.google.com
+    await _abrirGoogleOAuthOficial();
+  }
+
+  Future<void> _abrirGoogleOAuthOficial() async {
+    final sessionId = _generarSessionId();
+    final urlOAuth = Uri.parse(
+      '${AppConfig.baseUrl}/api/v1/auth/google/login?state=mobile_$sessionId',
+    );
+
+    final abierto = await launchUrl(
+      urlOAuth,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!abierto) {
       if (mounted) {
         setState(() {
-          _mensajeError = 'Error al conectar con el servidor en la nube: $e';
+          _cargando = false;
+          _mensajeError = 'No se pudo abrir el navegador para Google OAuth.';
         });
       }
-    } finally {
-      if (mounted) setState(() => _cargando = false);
+      return;
     }
-  }
 
-  void _mostrarSelectorCuentasGoogle() {
-    final TextEditingController otroCorreoCtrl = TextEditingController();
+    _timerPoll?.cancel();
+    int intentos = 0;
+    _timerPoll = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      intentos++;
+      if (intentos > 90) {
+        timer.cancel();
+        if (mounted) {
+          setState(() {
+            _cargando = false;
+            _mensajeError = 'Tiempo de espera agotado para el inicio de sesión con Google.';
+          });
+        }
+        return;
+      }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      'G',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF2563EB),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Iniciar sesión con Google',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Text(
-                          'Elige una cuenta para continuar a TelePeaje IA',
-                          style: TextStyle(fontSize: 12, color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const Divider(color: Colors.white12, height: 24),
-              _itemCuentaGoogle(
-                ctx: ctx,
-                email: 'jhairpinto8@gmail.com',
-                nombre: 'Jhair Pinto',
-                subtitulo: 'Administrador',
-                colorAvatar: Colors.blueAccent,
-              ),
-              _itemCuentaGoogle(
-                ctx: ctx,
-                email: 'doc.alvaro.pinto.ma@unifranz.edu.bo',
-                nombre: 'Ing. Alvaro Pinto Mamani',
-                subtitulo: 'Administrador Docente',
-                colorAvatar: Colors.teal,
-              ),
-              _itemCuentaGoogle(
-                ctx: ctx,
-                email: 'operador.peaje.unifranz@gmail.com',
-                nombre: 'Operador Caseta 1',
-                subtitulo: 'Operador de Peaje',
-                colorAvatar: Colors.indigo,
-              ),
-              _itemCuentaGoogle(
-                ctx: ctx,
-                email: 'usuario.no.autorizado@gmail.com',
-                nombre: 'Cuenta Externa No Autorizada',
-                subtitulo: 'Prueba de rechazo (Lista Blanca)',
-                colorAvatar: Colors.redAccent,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: otroCorreoCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Usar otra cuenta (@gmail.com)...',
-                        hintStyle: const TextStyle(color: Colors.white54),
-                        filled: true,
-                        fillColor: const Color(0xFF0F172A),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      final correo = otroCorreoCtrl.text.trim();
-                      if (correo.isEmpty) return;
-                      Navigator.pop(ctx);
-                      _autenticarCuentaSeleccionada(correo, correo.split('@').first);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Entrar'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+      try {
+        final estado = await ApiService.consultarEstadoOAuthMovil(sessionId);
+        if (estado['completado'] == true) {
+          timer.cancel();
+          if (!mounted) return;
+          setState(() => _cargando = false);
 
-  Widget _itemCuentaGoogle({
-    required BuildContext ctx,
-    required String email,
-    required String nombre,
-    required String subtitulo,
-    required Color colorAvatar,
-  }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      leading: CircleAvatar(
-        backgroundColor: colorAvatar,
-        child: Text(
-          nombre.substring(0, 1).toUpperCase(),
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-      ),
-      title: Text(
-        nombre,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13.5,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      subtitle: Text(
-        '$email · $subtitulo',
-        style: const TextStyle(color: Colors.white60, fontSize: 11.5),
-      ),
-      onTap: () {
-        Navigator.pop(ctx);
-        _autenticarCuentaSeleccionada(email, nombre);
-      },
-    );
+          if (estado['ok'] == true) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
+            );
+          } else {
+            setState(() {
+              _mensajeError = estado['error']?.toString() ??
+                  'Acceso denegado: cuenta no autorizada en la lista blanca.';
+            });
+          }
+        }
+      } catch (_) {}
+    });
   }
 
   @override
@@ -297,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton.icon(
-                      onPressed: _cargando ? null : _mostrarSelectorCuentasGoogle,
+                      onPressed: _cargando ? null : _iniciarConGoogle,
                       icon: _cargando
                           ? const SizedBox(
                               width: 18,
@@ -310,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           : const Icon(Icons.login_rounded),
                       label: Text(
                         _cargando
-                            ? 'Verificando Lista Blanca...'
+                            ? 'Esperando autenticación de Google...'
                             : 'Iniciar Sesión con Google',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,

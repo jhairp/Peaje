@@ -26,7 +26,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -245,13 +245,160 @@ async def llamar_endpoint_inferencia(
 # ==============================================================================
 # 1. AUTENTICACIÓN CON GOOGLE OAUTH 2.0 (Sección 4.4 y 4.5)
 # ==============================================================================
+import urllib.parse
+
+SESIONES_OAUTH_MOVIL: Dict[str, Dict[str, Any]] = {}
+
+
+def _obtener_base_url_publica(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+    return f"{proto}://{host}".rstrip("/")
+
+
 @app.get("/api/v1/auth/config", tags=["Autenticación"])
 def obtener_config_oauth():
-    """Devuelve el GOOGLE_CLIENT_ID público para inicializar el botón oficial de Google Sign-In en la web."""
+    """Devuelve el GOOGLE_CLIENT_ID público para inicializar el botón oficial de Google Sign-In en la web y app."""
     return {
         "google_client_id": GOOGLE_CLIENT_ID,
         "solo_google_oauth": True,
     }
+
+
+@app.get("/api/v1/auth/google/login", tags=["Autenticación"])
+def iniciar_flujo_google_oauth(
+    request: Request,
+    state: str = Query(default="web"),
+):
+    """
+    Redirige al selector oficial de cuentas de Google (accounts.google.com/o/oauth2/v2/auth)
+    con prompt=select_account para que el usuario elija su correo real de Google.
+    """
+    if not GOOGLE_CLIENT_ID or GOOGLE_CLIENT_ID.startswith("tu-"):
+        raise HTTPException(
+            status_code=500,
+            detail="Falta configurar GOOGLE_CLIENT_ID en las variables de entorno del servidor.",
+        )
+
+    base_url = _obtener_base_url_publica(request)
+    redirect_uri = f"{base_url}/api/v1/auth/google/callback"
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "prompt": "select_account",
+        "access_type": "online",
+        "state": state,
+    }
+    url_google = f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
+    return RedirectResponse(url=url_google)
+
+
+@app.get("/api/v1/auth/google/callback", tags=["Autenticación"])
+async def callback_google_oauth(
+    request: Request,
+    code: Optional[str] = Query(default=None),
+    state: str = Query(default="web"),
+    error: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """
+    Recibe el código OAuth 2.0 desde Google, lo intercambia por el id_token/access_token real,
+    verifica la Lista Blanca en la base de datos y devuelve la sesión a la Web o a la App Móvil.
+    """
+    es_movil = state.startswith("mobile_")
+    session_id = state.replace("mobile_", "", 1) if es_movil else ""
+
+    if error or not code:
+        msg_err = f"Inicio de sesión cancelado en Google ({error or 'sin código'})."
+        if es_movil:
+            SESIONES_OAUTH_MOVIL[session_id] = {"completado": True, "ok": False, "error": msg_err}
+            return HTMLResponse(
+                f"<html><body style='background:#0b1120;color:#fff;font-family:sans-serif;text-align:center;padding:40px;'>"
+                f"<h2>{msg_err}</h2><p>Ya puedes volver a la aplicación móvil TelePeaje IA.</p></body></html>"
+            )
+        return RedirectResponse(url=f"/?oauth_error={urllib.parse.quote(msg_err)}")
+
+    base_url = _obtener_base_url_publica(request)
+    redirect_uri = f"{base_url}/api/v1/auth/google/callback"
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r_tok = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+
+    if r_tok.status_code != 200:
+        msg_err = f"Error al intercambiar código con Google OAuth: {r_tok.text[:200]}"
+        if es_movil:
+            SESIONES_OAUTH_MOVIL[session_id] = {"completado": True, "ok": False, "error": msg_err}
+            return HTMLResponse(
+                f"<html><body style='background:#0b1120;color:#f87171;font-family:sans-serif;text-align:center;padding:40px;'>"
+                f"<h3>{msg_err}</h3><p>Vuelve a la app TelePeaje IA.</p></body></html>"
+            )
+        return RedirectResponse(url=f"/?oauth_error={urllib.parse.quote(msg_err)}")
+
+    tok_data = r_tok.json()
+    google_token = tok_data.get("id_token") or tok_data.get("access_token") or ""
+
+    try:
+        info_google = verificar_token_google(google_token)
+        usuario = validar_usuario_lista_blanca(db, info_google["email"], info_google.get("nombre"))
+        jwt_sistema = crear_token_sesion(usuario)
+
+        if es_movil:
+            SESIONES_OAUTH_MOVIL[session_id] = {
+                "completado": True,
+                "ok": True,
+                "access_token": jwt_sistema,
+                "usuario": {
+                    "id": usuario.id,
+                    "email_google": usuario.email_google,
+                    "nombre": usuario.nombre,
+                    "rol": usuario.rol,
+                    "activo": usuario.activo,
+                },
+            }
+            return HTMLResponse(
+                "<html><body style='background:#0b1120;color:#34d399;font-family:sans-serif;text-align:center;padding:50px;'>"
+                "<h2>✅ Autenticación con Google exitosa</h2>"
+                f"<p style='color:#e2e8f0;'>Cuenta autorizada: <b>{usuario.email_google}</b> ({usuario.rol.upper()})</p>"
+                "<p style='color:#94a3b8;margin-top:20px;'>Regresa a la ventana de la aplicación TelePeaje IA.</p>"
+                "<script>setTimeout(function(){ window.close(); }, 1200);</script>"
+                "</body></html>"
+            )
+
+        return RedirectResponse(url=f"/?oauth_token={ urllib.parse.quote(jwt_sistema) }")
+
+    except HTTPException as exc:
+        msg_err = str(exc.detail)
+        if es_movil:
+            SESIONES_OAUTH_MOVIL[session_id] = {"completado": True, "ok": False, "error": msg_err}
+            return HTMLResponse(
+                "<html><body style='background:#0b1120;color:#f87171;font-family:sans-serif;text-align:center;padding:50px;'>"
+                "<h2>🚫 Acceso Denegado (Lista Blanca)</h2>"
+                f"<p style='color:#fecaca;'>{msg_err}</p>"
+                "<p style='color:#94a3b8;margin-top:20px;'>Regresa a la aplicación móvil TelePeaje IA para ver el detalle.</p>"
+                "</body></html>"
+            )
+        return RedirectResponse(url=f"/?oauth_error={urllib.parse.quote(msg_err)}")
+
+
+@app.get("/api/v1/auth/google/mobile-poll/{session_id}", include_in_schema=False)
+def consultar_estado_oauth_movil(session_id: str):
+    """Permite a la app móvil verificar si el usuario ya completó la selección de cuenta en Google."""
+    datos = SESIONES_OAUTH_MOVIL.get(session_id)
+    if not datos:
+        return {"completado": False}
+    return datos
 
 
 @app.post("/api/v1/auth/google", response_model=AuthResponse, tags=["Autenticación"])
@@ -264,21 +411,6 @@ def login_con_google(req: GoogleAuthRequest, db: Session = Depends(get_db)):
     token_recibido = req.token or req.id_token or req.access_token or ""
     info_google = verificar_token_google(token_recibido)
     usuario = validar_usuario_lista_blanca(db, info_google["email"], info_google.get("nombre"))
-    jwt_sistema = crear_token_sesion(usuario)
-    return {
-        "access_token": jwt_sistema,
-        "token_type": "bearer",
-        "usuario": usuario,
-    }
-
-
-@app.post("/api/v1/auth/google-oauth-verify", response_model=AuthResponse, include_in_schema=False)
-async def verificar_cuenta_google_lista_blanca(request: Request, db: Session = Depends(get_db)):
-    """Valida una cuenta de Google contra la lista blanca de la BD (demostración de roles y rechazo 403)."""
-    body = await request.json()
-    email = (body.get("email") or "").lower().strip()
-    nombre = body.get("nombre") or email
-    usuario = validar_usuario_lista_blanca(db, email, nombre)
     jwt_sistema = crear_token_sesion(usuario)
     return {
         "access_token": jwt_sistema,

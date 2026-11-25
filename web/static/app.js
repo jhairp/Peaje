@@ -18,6 +18,21 @@ let sseConexion = null;
 // 1. AUTENTICACIÓN GOOGLE OAUTH 2.0
 // ============================================================================
 async function inicializarApp() {
+  // Verificar si regresamos del callback oficial de Google OAuth 2.0 (/?oauth_token=... o /?oauth_error=...)
+  const urlParams = new URLSearchParams(window.location.search);
+  const oauthToken = urlParams.get("oauth_token");
+  const oauthError = urlParams.get("oauth_error");
+
+  if (oauthToken) {
+    TOKEN_SESION = oauthToken;
+    localStorage.setItem("peaje_jwt", TOKEN_SESION);
+    window.history.replaceState({}, document.title, "/");
+  } else if (oauthError) {
+    window.history.replaceState({}, document.title, "/");
+    document.getElementById("login-screen").classList.remove("hidden");
+    mostrarErrorLogin(oauthError);
+  }
+
   try {
     const rCfg = await fetch("/api/v1/auth/config");
     const cfg = await rCfg.json();
@@ -45,29 +60,6 @@ async function inicializarApp() {
     }
   }
   document.getElementById("login-screen").classList.remove("hidden");
-}
-
-async function iniciarSesionGoogleCuenta(email, nombre) {
-  // Solicita un token firmado de verificación Google OAuth para la cuenta seleccionada
-  document.getElementById("login-error-box").classList.add("hidden");
-  try {
-    const resp = await fetch("/api/v1/auth/google-oauth-verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, nombre }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) {
-      mostrarErrorLogin(data.detail || "Acceso denegado por lista blanca.");
-      return;
-    }
-    TOKEN_SESION = data.access_token;
-    USUARIO_ACTUAL = data.usuario;
-    localStorage.setItem("peaje_jwt", TOKEN_SESION);
-    mostrarPanelPrincipal();
-  } catch (err) {
-    mostrarErrorLogin("Error de red al autenticar con Google OAuth.");
-  }
 }
 
 async function autenticarConBackend(googleIdToken) {
