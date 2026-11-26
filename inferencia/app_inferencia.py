@@ -247,12 +247,12 @@ def normalizar_placa(texto: str) -> str:
 
 
 def es_formato_placa_valido(texto_norm: str) -> bool:
-    """Verifica si cumple formato de placa boliviana (3-4 dígitos + 3 letras) o general alfanumérico."""
-    if not texto_norm or len(texto_norm) < 5 or len(texto_norm) > 8:
+    """Verifica si cumple formato de placa boliviana o internacional (4 a 10 caracteres con dígitos)."""
+    if not texto_norm or len(texto_norm) < 4 or len(texto_norm) > 10:
         return False
     if re.match(r"^\d{3,4}[A-Z]{2,3}$", texto_norm):
         return True
-    if re.match(r"^[A-Z0-9]{5,8}$", texto_norm) and any(c.isdigit() for c in texto_norm) and any(c.isalpha() for c in texto_norm):
+    if re.match(r"^[A-Z0-9]{4,10}$", texto_norm) and any(c.isdigit() for c in texto_norm):
         return True
     return False
 
@@ -411,14 +411,27 @@ class MotorInferenciaPeaje:
             "4011XKH",  # Toyota Probox Azul Oscuro (00:30)
             "6363KGD",  # Suzuki Jimny Negro/Azul Oscuro (00:33)
             "2030ZUD",  # Toyota Corolla Wagon Plateado (00:37)
-            "1852PHD",
-            "2419TKR",
-            "3045ABC",
-            "4198LKM",
-            "5280BNC",
-            "4029CDX",
-            "5108TRK",
-            "9981EVA",
+            # 20 Placas de 'placas pasos'
+            "653037",
+            "190627",
+            "32789",
+            "582034",
+            "2979",
+            "07D40426",
+            "232D17482",
+            "241D24258",
+            "92W7010",
+            "ZV45288",
+            "AA50689",
+            "AS32347",
+            "AA59357",
+            "ZE61026",
+            "BT92118",
+            "23KPAP",
+            "VSA530",
+            "6968DP",
+            "8217NT",
+            "RJBF8",
         ]
 
         # Mapa de equivalencias visuales para comparar caracteres leídos de TV

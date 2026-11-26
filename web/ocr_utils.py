@@ -72,14 +72,12 @@ def normalizar_placa(texto: str, corregir_posiciones: bool = False) -> str:
 
 
 def validar_formato_placa(placa_norm: str) -> bool:
-    """Valida si una placa normalizada tiene formato válido (ej. 1852PHD, 852ABC o alfanumérico 5-8 chars)."""
-    if not placa_norm or len(placa_norm) < 5 or len(placa_norm) > 8:
+    """Valida si una placa normalizada tiene formato válido (boliviana o internacional 4-10 caracteres)."""
+    if not placa_norm or len(placa_norm) < 4 or len(placa_norm) > 10:
         return False
-    # Formato boliviano estándar: 3 o 4 dígitos seguidos de 3 letras
     if re.match(r"^\d{3,4}[A-Z]{3}$", placa_norm):
         return True
-    # Formato general de placa alfanumérica
-    if re.match(r"^[A-Z0-9]{5,8}$", placa_norm) and any(c.isdigit() for c in placa_norm) and any(c.isalpha() for c in placa_norm):
+    if re.match(r"^[A-Z0-9]{4,10}$", placa_norm) and any(c.isdigit() for c in placa_norm):
         return True
     return False
 
@@ -87,19 +85,19 @@ def validar_formato_placa(placa_norm: str) -> bool:
 def extraer_placa_de_mensaje(mensaje: str) -> str:
     """
     Extrae el candidato de placa dentro de una frase en lenguaje natural
-    (ej. '¿Cuál es el estado de la placa 1852-PHD?' -> '1852PHD').
+    (ej. '¿Cuál es el estado de la placa 2673-TYH?' o '07-D-40426' o 'AA 50689').
     """
     if not mensaje:
         return ""
     msg = mensaje.upper().strip()
 
-    # 1. Patrón explícito con guion o espacio: 3-4 chars + 3 chars (con posibles errores OCR como 1B52-PH0)
-    m = re.search(r"\b([0-9OIBSZG]{3,4})[\s\-]+([A-Z018526]{3})\b", msg)
-    if m:
-        return limpiar_placa_basico(m.group(1) + m.group(2))
+    # 1. Patrón irlandés con 2 guiones (ej. 07-D-40426, 232-D-17482, 241-D-24258, 92-W-7010)
+    m_irl = re.search(r"\b(\d{2,3})[\s\-]+([A-Z])[\s\-]+(\d{4,6})\b", msg)
+    if m_irl:
+        return limpiar_placa_basico(m_irl.group(1) + m_irl.group(2) + m_irl.group(3))
 
-    # 2. Token único de 6 a 7 caracteres que mezcla números/letras tipo placa
-    tokens = re.findall(r"\b[A-Z0-9\-]{5,9}\b", msg)
+    # 2. Patrón boliviano o internacional con guion o espacio (ej. 2673-TYH, AA 50689, ZV 45288, VSA 530, RJB-F8)
+    m = re.search(r"\b([A-Z0-9]{2,4})[\s\-]+([A-Z0-9]{2,5})\b", msg)
     palabras_ignorar = {
         "PLACA",
         "PLACAS",
@@ -114,17 +112,28 @@ def extraer_placa_de_mensaje(mensaje: str) -> str:
         "CAMION",
         "MINIBUS",
         "ALERTA",
+        "CUAL",
+        "PARA",
+        "COMO",
+        "ESTA",
     }
+    if m and m.group(1) not in palabras_ignorar and m.group(2) not in palabras_ignorar:
+        unido = limpiar_placa_basico(m.group(1) + m.group(2))
+        if 4 <= len(unido) <= 10 and any(c.isdigit() for c in unido):
+            return unido
+
+    # 3. Token único de 4 a 10 caracteres que contenga dígitos
+    tokens = re.findall(r"\b[A-Z0-9\-]{4,11}\b", msg)
     for tok in tokens:
         limpio = limpiar_placa_basico(tok)
         if limpio in palabras_ignorar:
             continue
-        if 5 <= len(limpio) <= 8 and (any(c.isdigit() for c in limpio) or re.match(r"^[0-9OIBSZG]{3,4}[A-Z018526]{3}$", limpio)):
+        if 4 <= len(limpio) <= 10 and any(c.isdigit() for c in limpio):
             return limpio
 
-    # 3. Si el usuario solo escribió la placa corta
+    # 4. Si el usuario solo escribió la placa corta
     limpio_total = limpiar_placa_basico(msg)
-    if 5 <= len(limpio_total) <= 8 and limpio_total not in palabras_ignorar:
+    if 4 <= len(limpio_total) <= 10 and limpio_total not in palabras_ignorar:
         return limpio_total
     return ""
 
